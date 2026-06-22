@@ -1,0 +1,1965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bang 3D</title>
+<style>
+  :root { --void-bg:#04050a; --star:#cfe8ff; --bang-core:#ffd27a; --hud:#7fa8d0; --hud-dim:#3d5168; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; overflow:hidden; background:var(--void-bg); }
+  body { font-family:"JetBrains Mono", ui-monospace, monospace; color:var(--hud); -webkit-font-smoothing:antialiased; }
+  #gl { position:fixed; inset:0; display:block; cursor:grab; }
+  #gl:active { cursor:grabbing; }
+  .hud { position:fixed; z-index:10; pointer-events:none; font-size:12px; letter-spacing:0.08em; text-transform:uppercase; }
+  #hud-top-left { top:18px; left:20px; }
+  #hud-top-left .title { font-size:22px; letter-spacing:0.35em; color:var(--bang-core); text-transform:uppercase; margin-bottom:6px; }
+  #hud-sub { color:var(--hud-dim); font-size:11px; max-width:60vw; word-break:break-all; }
+  #hud-top-right { top:18px; right:20px; text-align:right; color:var(--hud-dim); }
+  #controls { position:fixed; bottom:20px; left:20px; z-index:10; display:flex; gap:10px; align-items:center; flex-wrap:wrap; max-width:90vw; }
+  .btn { pointer-events:auto; cursor:pointer; background:rgba(20,28,40,0.7); border:1px solid var(--hud-dim);
+    color:var(--hud); font:inherit; font-size:11px; letter-spacing:0.12em; text-transform:uppercase;
+    padding:8px 14px; border-radius:2px; transition:all 0.15s ease; }
+  .btn:hover { border-color:#6fb1ff; color:var(--star); }
+  .btn.active { border-color:var(--bang-core); color:var(--bang-core); }
+  .btn:disabled { opacity:0.35; cursor:default; }
+  .btn.danger:hover { border-color:#ff5d5d; color:#ff8a8a; }
+  .speedwrap { display:flex; align-items:center; gap:8px; pointer-events:auto; color:var(--hud-dim); font-size:10px; letter-spacing:0.12em; text-transform:uppercase; }
+  #speed { -webkit-appearance:none; appearance:none; width:110px; height:3px; border-radius:2px; background:var(--hud-dim); outline:none; }
+  #speed::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:var(--bang-core); cursor:pointer; }
+  #hint { position:fixed; bottom:22px; right:20px; z-index:10; color:var(--hud-dim); font-size:10px; letter-spacing:0.1em; pointer-events:none; text-align:right; }
+  #fps { position:fixed; top:18px; left:50%; transform:translateX(-50%); z-index:10; color:var(--hud-dim); font-size:11px; letter-spacing:0.1em; pointer-events:none; }
+  #err { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:20; color:#ff8a8a; font-size:13px; text-align:center; padding:40px; line-height:1.6; }
+  #panel { position:fixed; top:90px; right:20px; z-index:13; width:280px; max-height:78vh; overflow-y:auto;
+    background:rgba(8,12,20,0.92); border:1px solid var(--hud-dim); border-radius:4px; padding:12px 14px; display:none; }
+  #panel.show { display:block; }
+  #panel .pgroup { color:var(--bang-core); font-size:10px; letter-spacing:0.16em; text-transform:uppercase; margin:12px 0 6px; }
+  #panel .pgroup:first-child { margin-top:0; }
+  #panel .prow { display:flex; flex-direction:column; gap:2px; margin:7px 0; }
+  #panel .prow label { color:var(--hud-dim); font-size:9px; letter-spacing:0.08em; text-transform:uppercase; }
+  #panel input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:3px; border-radius:2px; background:var(--hud-dim); outline:none; }
+  #panel input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:var(--bang-core); cursor:pointer; }
+  #panel input[type=range]::-moz-range-thumb { width:12px; height:12px; border:none; border-radius:50%; background:var(--bang-core); cursor:pointer; }
+  #panel .pbtns { display:flex; gap:8px; margin-top:12px; }
+  #panel .pbtns .btn { flex:1; }
+  .settings-tabs { display:flex; gap:4px; margin-bottom:10px; flex-wrap:wrap; }
+  .stab { flex:1 1 auto; pointer-events:auto; cursor:pointer; background:rgba(20,28,40,0.7); border:1px solid var(--hud-dim);
+    color:var(--hud-dim); font:inherit; font-size:9px; letter-spacing:0.06em; text-transform:uppercase; padding:6px 4px; border-radius:2px; }
+  .stab.active { border-color:var(--bang-core); color:var(--bang-core); }
+  .stab-pane { display:none; }
+  .stab-pane.active { display:block; }
+  #settings-viewport { width:100%; height:120px; display:block; background:radial-gradient(circle at 50% 40%, #0a0f1a, #04050a);
+    border-radius:3px; margin-bottom:6px; }
+  .settings-status { color:var(--hud-dim); font-size:9px; text-align:center; margin-bottom:10px; min-height:1.2em; }
+  .color-row, .age-row { display:flex; align-items:center; gap:8px; margin:6px 0; }
+  .color-row label, .age-row label { flex:1; color:var(--hud); font-size:10px; text-transform:capitalize; }
+  .color-row input[type=color] { width:34px; height:22px; border:1px solid var(--hud-dim); border-radius:3px; background:none; cursor:pointer; padding:0; }
+  .age-row select { flex:1; background:rgba(4,6,12,0.9); border:1px solid var(--hud-dim); color:var(--star);
+    font:inherit; font-size:10px; padding:4px 6px; border-radius:3px; }
+  .age-row .age-days { width:64px; color:var(--hud-dim); font-size:9px; text-align:right; }
+  #labels { position:fixed; inset:0; z-index:8; pointer-events:none; }
+  #labels .lab { position:absolute; transform:translate(-50%,-50%); color:#cfe8ff; font-size:10px; letter-spacing:0.03em;
+    white-space:nowrap; text-shadow:0 0 4px #04050a, 0 0 4px #04050a; }
+
+  /* ---- Bang Systems Command — replaces the old #inspect panel ---- */
+  #cmd { position:fixed; top:64px; left:20px; z-index:14; width:300px; max-height:calc(85vh - 50px); overflow-y:auto;
+    background:rgba(6,9,16,0.95); border:1px solid var(--hud-dim); border-radius:4px;
+    box-shadow:0 0 30px rgba(0,0,0,0.6); display:none; font-size:11px; }
+  #cmd.show { display:block; }
+  #cmd .cmd-head { display:flex; align-items:center; justify-content:space-between; padding:10px 12px;
+    border-bottom:1px solid var(--hud-dim); }
+  #cmd .cmd-title { color:var(--bang-core); font-size:11px; letter-spacing:0.22em; text-transform:uppercase; }
+  #cmd .cmd-close { pointer-events:auto; cursor:pointer; color:var(--hud-dim); font-size:14px; line-height:1; padding:2px 6px; }
+  #cmd .cmd-close:hover { color:#ff8a8a; }
+  #cmd .cmd-status { padding:5px 12px; font-size:9px; letter-spacing:0.14em; text-transform:uppercase; color:#5fe08a;
+    border-bottom:1px solid var(--hud-dim); background:rgba(95,224,138,0.06); }
+  #cmd-viewport { width:100%; height:170px; display:block; background:radial-gradient(circle at 50% 40%, #0a0f1a, #04050a); }
+  #cmd .cmd-body { padding:12px; }
+  #cmd .cmd-name { color:#fff; font-size:13px; word-break:break-all; margin-bottom:8px; }
+  #cmd .cmd-row { display:flex; justify-content:space-between; margin:4px 0; color:var(--hud); letter-spacing:0.03em; }
+  #cmd .cmd-key { color:var(--hud-dim); }
+  #cmd .cmd-section { margin-top:12px; padding-top:10px; border-top:1px solid var(--hud-dim); }
+  #cmd .cmd-section-title { color:var(--bang-core); font-size:9px; letter-spacing:0.18em; text-transform:uppercase; margin-bottom:8px; }
+  #cmd .makeup-row { display:flex; align-items:center; gap:7px; margin:4px 0; font-size:10px; }
+  #cmd .makeup-sw { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  #cmd .makeup-label { color:var(--hud); flex:1; }
+  #cmd .makeup-count { color:var(--hud-dim); }
+  #cmd .cmd-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+  #cmd .cmd-actions .btn { flex:1 1 calc(50% - 3px); font-size:10px; padding:7px 8px; text-align:center; }
+  #cmd input.cmd-input { width:100%; background:rgba(4,6,12,0.9); border:1px solid var(--hud-dim); color:var(--star);
+    font-family:inherit; font-size:11px; padding:6px 8px; border-radius:3px; margin:4px 0; }
+  #cmd .cmd-input::placeholder { color:var(--hud-dim); }
+  #cmd .cmd-hint { color:var(--hud-dim); font-size:9px; margin-top:4px; letter-spacing:0.04em; }
+
+  /* ---- create flow ---- */
+  #create-panel { position:fixed; top:64px; left:20px; z-index:14; width:300px;
+    background:rgba(6,9,16,0.95); border:1px solid var(--hud-dim); border-radius:4px;
+    box-shadow:0 0 30px rgba(0,0,0,0.6); display:none; font-size:11px; max-height:calc(85vh - 50px); overflow-y:auto; }
+  #create-panel.show { display:block; }
+  #create-panel .cmd-head { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid var(--hud-dim); }
+  #create-panel .cmd-title { color:var(--bang-core); font-size:11px; letter-spacing:0.22em; text-transform:uppercase; }
+  #create-panel .cmd-close { cursor:pointer; color:var(--hud-dim); font-size:14px; padding:2px 6px; }
+  #create-panel .cmd-body { padding:12px; }
+  #create-panel label.f { display:block; color:var(--hud-dim); font-size:9px; letter-spacing:0.12em; text-transform:uppercase; margin:10px 0 4px; }
+  #create-panel .typewrap { display:flex; gap:8px; }
+  #create-panel .typewrap .btn { flex:1; }
+  #create-panel .err { color:#ff8a8a; font-size:10px; margin-top:6px; display:none; }
+
+  #toast { position:fixed; bottom:70px; left:50%; transform:translateX(-50%); z-index:25;
+    background:rgba(8,14,10,0.95); border:1px solid #5fe08a; color:#9ef0b8; padding:9px 18px;
+    border-radius:3px; font-size:11px; letter-spacing:0.06em; display:none; pointer-events:none; }
+  #toast.err { border-color:#ff5d5d; color:#ff9a9a; background:rgba(20,8,8,0.95); }
+  #toast.flash { animation:toastflash 0.5s steps(2,jump-none) 2; }
+  @keyframes toastflash { 50% { box-shadow:0 0 0 4px rgba(255,255,255,0.5); } }
+
+  #onboard { position:fixed; inset:0; z-index:30; display:none; align-items:center; justify-content:center;
+    background:radial-gradient(circle at 50% 40%, #0a0f1a, #04050a); }
+  #onboard.show { display:flex; }
+  #onboard-card { text-align:center; max-width:420px; padding:30px; }
+  #onboard-title { font-size:28px; letter-spacing:0.4em; color:var(--bang-core); text-transform:uppercase; margin-bottom:18px; }
+  #onboard-sub { color:var(--hud); font-size:12px; line-height:1.7; letter-spacing:0.03em; }
+  #onboard-err { color:#ff8a8a; font-size:11px; margin-top:14px; min-height:1em; }
+
+</style>
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <div class="hud" id="hud-top-left"><div class="title">Bang</div></div>
+  <div class="hud" id="hud-top-right"><div id="hud-sub">/</div><div id="hud-count">—</div><div id="hud-cam">—</div></div>
+  <div id="fps">—</div>
+  <div id="labels"></div>
+  <div id="label"></div>
+
+  <!-- Bang Systems Command: replaces the old single-click inspect popup -->
+  <div id="cmd">
+    <div class="cmd-head">
+      <span class="cmd-title">⟁ Bang Systems Command</span>
+      <span class="cmd-close" id="cmd-close">✕</span>
+    </div>
+    <div class="cmd-status" id="cmd-status">Analyzing remote body…</div>
+    <canvas id="cmd-viewport"></canvas>
+    <div class="cmd-body" id="cmd-body"></div>
+  </div>
+
+  <!-- Create flow panel -->
+  <div id="create-panel">
+    <div class="cmd-head">
+      <span class="cmd-title">⟁ Stage New Body</span>
+      <span class="cmd-close" id="create-close">✕</span>
+    </div>
+    <canvas id="create-viewport" style="width:100%;height:170px;display:block;background:radial-gradient(circle at 50% 40%, #0a0f1a, #04050a);"></canvas>
+    <div class="cmd-body">
+      <div class="typewrap">
+        <button class="btn active" id="ctype-file">Planet (file)</button>
+        <button class="btn" id="ctype-folder">Galaxy (folder)</button>
+      </div>
+      <label class="f">Name</label>
+      <input type="text" class="cmd-input" id="cname" placeholder="untitled.txt">
+      <label class="f" id="csize-label">Simulated size (preview only)</label>
+      <input type="range" id="csize" min="0" max="100" value="20">
+      <div class="cmd-row"><span class="cmd-key">preview size</span><span id="csize-val">—</span></div>
+      <div class="err" id="create-err"></div>
+      <div class="cmd-actions">
+        <button class="btn" id="btn-create-confirm" style="flex:1 1 100%;">Create at current location</button>
+      </div>
+      <div class="cmd-hint" id="create-loc">in /</div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- First-launch origin picker — shown only when no root folder is configured yet -->
+  <div id="onboard">
+    <div id="onboard-card">
+      <div id="onboard-title">Bang</div>
+      <div id="onboard-sub">Choose the folder that will become your universe's origin.<br>Everything inside it — and its subfolders — will be rendered as galaxies and planets.</div>
+      <button class="btn" id="onboard-pick" style="margin-top:18px;padding:12px 24px;">Choose Folder…</button>
+      <div id="onboard-err"></div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button class="btn" id="btn-up">&larr; Out</button>
+    <button class="btn" id="btn-void">Void: Off</button>
+    <button class="btn" id="btn-recenter">Recenter</button>
+    <button class="btn" id="btn-new">+ New</button>
+    <span class="speedwrap"><label for="speed">Speed</label><input type="range" id="speed" min="0" max="400" value="100"></span>
+  </div>
+  <div id="hint">Drag orbit &middot; Scroll/pinch zoom &middot; Right/2-finger pan &middot; Click a galaxy to enter</div>
+  <button class="btn" id="btn-tune" style="position:fixed;top:54px;right:20px;z-index:13;">Settings ▾</button>
+  <div id="panel">
+    <div class="settings-tabs">
+      <button class="stab active" data-tab="render">Rendering</button>
+      <button class="stab" data-tab="colors">Colors</button>
+      <button class="stab" data-tab="age">Age Stages</button>
+      <button class="stab" data-tab="use">Use Stages</button>
+      <button class="stab" data-tab="glow">Glow</button>
+    </div>
+    <canvas id="settings-viewport"></canvas>
+    <div class="settings-status" id="settings-status"></div>
+
+    <div class="stab-pane active" id="pane-render">
+      <div class="pgroup">Galaxy</div>
+      <div class="prow"><label>glow intensity</label><input type="range" id="t_galaxyGlow" min="0" max="2" step="0.01" value="0.95"></div>
+      <div class="prow"><label>halo size</label><input type="range" id="t_galaxyHalo" min="0" max="14" step="0.1" value="7"></div>
+      <div class="prow"><label>point size</label><input type="range" id="t_galaxyPoint" min="0.1" max="2" step="0.01" value="0.7"></div>
+      <div class="prow"><label>halo opacity</label><input type="range" id="t_galaxyHaloOp" min="0" max="0.8" step="0.01" value="0.28"></div>
+      <div class="pgroup">Planet Bodies</div>
+      <div class="prow"><label>glossiness</label><input type="range" id="t_bodyGloss" min="0" max="1" step="0.01" value="0.65"></div>
+      <div class="prow"><label>rim glow</label><input type="range" id="t_bodyRim" min="0" max="1" step="0.01" value="0.45"></div>
+      <div class="prow"><label>emissive</label><input type="range" id="t_bodyEmissive" min="0" max="1.2" step="0.01" value="0.5"></div>
+      <div class="prow"><label>size scale</label><input type="range" id="t_bodyScale" min="0.4" max="2.5" step="0.01" value="1"></div>
+      <div class="pgroup">Atmosphere &amp; Space</div>
+      <div class="prow"><label>fog density</label><input type="range" id="t_fog" min="0" max="2" step="0.01" value="1"></div>
+      <div class="prow"><label>star brightness</label><input type="range" id="t_stars" min="0" max="2" step="0.01" value="0.9"></div>
+      <div class="prow"><label>core radiance</label><input type="range" id="t_core" min="0" max="2" step="0.01" value="0.85"></div>
+      <div class="pgroup">Motion &amp; Orbits</div>
+      <div class="prow"><label>speed</label><input type="range" id="t_speed" min="0" max="4" step="0.01" value="1"></div>
+      <div class="prow"><label>orbit ring opacity</label><input type="range" id="t_orbitOp" min="0" max="0.6" step="0.01" value="0.16"></div>
+      <div class="prow"><label>trail opacity</label><input type="range" id="t_trailOp" min="0" max="1" step="0.01" value="0.5"></div>
+      <div class="prow"><label>trail length</label><input type="range" id="t_trailLen" min="0.2" max="2.5" step="0.01" value="1"></div>
+      <div class="pbtns"><button class="btn" id="btn-save-render">Save</button><button class="btn" id="btn-reset-render">Reset</button></div>
+      <div class="pgroup">Universe</div>
+      <div class="cmd-hint" style="margin-bottom:8px;">Change which folder is the center of your universe.</div>
+      <div class="pbtns"><button class="btn" id="btn-change-origin" style="flex:1 1 100%;">Change Origin Folder…</button></div>
+    </div>
+
+    <div class="stab-pane" id="pane-colors">
+      <div class="pgroup">File-Type Colors</div>
+      <div id="color-rows"></div>
+      <div class="pbtns"><button class="btn" id="btn-save-colors">Save</button><button class="btn" id="btn-reset-colors">Reset</button></div>
+    </div>
+
+    <div class="stab-pane" id="pane-age">
+      <div class="pgroup">Structure by Age</div>
+      <div class="cmd-hint" style="margin-bottom:8px;">How long a file has existed determines how built-up its surface looks.</div>
+      <div id="age-rows"></div>
+      <div class="pbtns"><button class="btn" id="btn-save-age">Save</button><button class="btn" id="btn-reset-age">Reset</button></div>
+    </div>
+
+    <div class="stab-pane" id="pane-use">
+      <div class="pgroup">Decay by Idle Time</div>
+      <div class="cmd-hint" style="margin-bottom:8px;">How long since a file was last touched determines how worn/abandoned its surface looks, layered on top of the age structure.</div>
+      <div id="use-rows"></div>
+      <div class="pbtns"><button class="btn" id="btn-save-use">Save</button><button class="btn" id="btn-reset-use">Reset</button></div>
+    </div>
+
+    <div class="stab-pane" id="pane-glow">
+      <div class="pgroup">Brightness by Last Use</div>
+      <div class="cmd-hint" style="margin-bottom:8px;">Recently modified files glow brighter; idle files dim over time.</div>
+      <div class="prow"><label>brightness when active</label><input type="range" id="g_maxglow" min="0.2" max="1.5" step="0.01" value="1.0"></div>
+      <div class="prow"><label>brightness when idle</label><input type="range" id="g_minglow" min="0" max="1" step="0.01" value="0.15"></div>
+      <div class="prow"><label>days until fully dim</label><input type="range" id="g_window" min="7" max="365" step="1" value="60"></div>
+      <div class="pbtns"><button class="btn" id="btn-save-glow">Save</button><button class="btn" id="btn-reset-glow">Reset</button></div>
+    </div>
+  </div>
+  <div id="err"></div>
+
+<!--
+  SECURITY: integrity + crossorigin pin this script to its exact expected
+  bytes (Subresource Integrity) — if cdnjs ever serves something different
+  for this URL (compromise, MITM, or a CDN mistake), the browser refuses to
+  run it instead of silently executing whatever showed up.
+
+  ⚠ VERIFY BEFORE RELYING ON THIS: the hash below was sourced from a
+  third-party page referencing this exact r128 build, not computed directly
+  from a freshly downloaded copy of the file. cdnjs has had real, documented
+  cases where its own displayed SRI hash didn't match what it actually
+  serves. Before shipping, confirm it yourself with one of:
+    curl -s https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js \
+      | openssl dgst -sha512 -binary | openssl base64 -A
+  ...and compare against the digest portion below. If they don't match,
+  replace it with the one your own command produces — an SRI mismatch
+  blocks the script entirely (the whole 3D view fails to load), so this
+  is not optional to skip.
+-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
+  integrity="sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ=="
+  crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+// ============================================================================
+// PLANET TEXTURE SYSTEM
+// ----------------------------------------------------------------------------
+// Two independent axes per file node:
+//   AGE  (0..3): bare -> outpost -> settlement -> metropolis  (built from ageDays)
+//   USE  (0..3): active -> quiet -> neglected -> derelict     (built from idleDays)
+//
+// Each category gets 4 age-stage base textures + 4 use-stage decay overlays.
+// Real bespoke PNGs go in /textures/{category}/age_{0-3}.png and use_{0-3}.png.
+// If a PNG is missing (404), the matching procedural generator below is used
+// instead -- so the app always has a fully textured planet, never a blank one.
+//
+// All textures are equirectangular (2:1 aspect, e.g. 1024x512) painted as a
+// top-down "world map" of that category's civilization metaphor.
+// ============================================================================
+
+const STAGE_NAMES = {
+  age: ["bare", "outpost", "settlement", "metropolis"],
+  use: ["active", "quiet", "neglected", "derelict"],
+};
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function makeCanvas(w, h) {
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  return c;
+}
+
+function baseSky(ctx, w, h, hue, sat, lo, hi) {
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, `hsl(${hue},${sat}%,${hi}%)`);
+  g.addColorStop(1, `hsl(${hue},${sat + 6}%,${lo}%)`);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+}
+
+// generic scatter helper: places `count` small marks of given drawFn across the band
+function scatterBand(ctx, w, h, rnd, count, yLo, yHi, drawFn) {
+  for (let i = 0; i < count; i++) {
+    const x = rnd() * w;
+    const y = h * (yLo + rnd() * (yHi - yLo));
+    drawFn(x, y, rnd);
+  }
+}
+
+// ============================================================================
+// AGE-STAGE GENERATORS — one set of 4 functions per category.
+// Signature: (ctx, w, h, rnd) -> void, draws directly onto ctx.
+// ============================================================================
+
+const AGE_GENERATORS = {
+
+  document: [
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,210,18,4,9);
+      scatterBand(ctx,w,h,rnd,10,0.3,0.8,(x,y,r)=>{ ctx.fillStyle="rgba(180,200,230,0.3)"; ctx.fillRect(x,y,6,8); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,208,22,4,10);
+      scatterBand(ctx,w,h,rnd,22,0.25,0.85,(x,y,r)=>{ ctx.fillStyle="rgba(190,210,240,0.4)"; ctx.fillRect(x,y,7,10+r()*6);
+        ctx.fillStyle="rgba(255,210,130,0.5)"; ctx.fillRect(x+1,y-2,2,2); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,206,26,3,10);
+      scatterBand(ctx,w,h,rnd,40,0.18,0.9,(x,y,r)=>{ const hh=12+r()*16; ctx.fillStyle="rgba(195,215,245,0.55)"; ctx.fillRect(x,y-hh,8,hh);
+        ctx.fillStyle="rgba(120,150,200,0.4)"; for(let s=0;s<hh;s+=4) ctx.fillRect(x,y-s,8,1); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,204,30,2,9);
+      scatterBand(ctx,w,h,rnd,64,0.12,0.95,(x,y,r)=>{ const hh=16+r()*26; ctx.fillStyle="rgba(200,220,250,0.65)"; ctx.fillRect(x,y-hh,9,hh);
+        for(let s=0;s<hh;s+=3) { ctx.fillStyle = r()>0.6 ? "rgba(255,214,140,0.85)" : "rgba(130,160,210,0.4)"; ctx.fillRect(x,y-s,9,1.2); } });
+      const g=ctx.createLinearGradient(0,h*0.25,0,h*0.75); g.addColorStop(0,"rgba(140,180,255,0)"); g.addColorStop(0.5,"rgba(140,180,255,0.10)"); g.addColorStop(1,"rgba(140,180,255,0)");
+      ctx.fillStyle=g; ctx.fillRect(0,0,w,h); },
+  ],
+
+  spreadsheet: [
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,140,16,4,9);
+      ctx.strokeStyle="rgba(150,220,170,0.2)"; for(let i=0;i<6;i++){ const y=h*(0.3+i*0.08); ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); } },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,138,20,4,10);
+      ctx.strokeStyle="rgba(150,220,170,0.3)"; for(let i=0;i<10;i++){ const y=h*(0.2+i*0.06); ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+      scatterBand(ctx,w,h,rnd,14,0.25,0.85,(x,y,r)=>{ ctx.fillStyle="rgba(160,230,180,0.45)"; ctx.fillRect(x,y,10,10); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,136,24,3,10);
+      ctx.strokeStyle="rgba(150,220,170,0.4)"; for(let i=0;i<16;i++){ const y=h*(0.12+i*0.05); ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+      for(let i=0;i<16;i++){ const x=w*(i/16); ctx.beginPath(); ctx.moveTo(x,h*0.1); ctx.lineTo(x,h*0.95); ctx.stroke(); }
+      scatterBand(ctx,w,h,rnd,30,0.15,0.9,(x,y,r)=>{ ctx.fillStyle="rgba(170,235,190,0.55)"; ctx.fillRect(x,y,12,12+r()*8); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,134,28,2,9);
+      ctx.strokeStyle="rgba(150,220,170,0.5)"; for(let i=0;i<22;i++){ const y=h*(0.08+i*0.04); ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+      for(let i=0;i<24;i++){ const x=w*(i/24); ctx.beginPath(); ctx.moveTo(x,h*0.05); ctx.lineTo(x,h*0.98); ctx.stroke(); }
+      scatterBand(ctx,w,h,rnd,54,0.1,0.95,(x,y,r)=>{ ctx.fillStyle = r()>0.7?"rgba(255,220,140,0.75)":"rgba(175,240,195,0.65)"; ctx.fillRect(x,y,13,14+r()*14); }); },
+  ],
+
+  presentation: [
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,30,20,4,9);
+      scatterBand(ctx,w,h,rnd,5,0.4,0.7,(x,y,r)=>{ ctx.fillStyle="rgba(255,200,140,0.4)"; ctx.fillRect(x,y,10,6); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,28,24,4,10);
+      scatterBand(ctx,w,h,rnd,10,0.3,0.8,(x,y,r)=>{ ctx.strokeStyle="rgba(255,200,140,0.5)"; ctx.lineWidth=1.4; ctx.beginPath(); ctx.arc(x,y,12+r()*6,Math.PI,0); ctx.stroke(); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,26,28,3,10);
+      scatterBand(ctx,w,h,rnd,24,0.18,0.88,(x,y,r)=>{ const hh=16+r()*20; ctx.fillStyle="rgba(255,205,150,0.55)"; ctx.fillRect(x,y-hh,7,hh);
+        ctx.beginPath(); ctx.arc(x+3.5,y-hh-5,5,0,7); ctx.fillStyle="rgba(255,160,90,0.65)"; ctx.fill(); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,24,32,2,9);
+      scatterBand(ctx,w,h,rnd,46,0.1,0.94,(x,y,r)=>{ const hh=22+r()*32; ctx.fillStyle="rgba(255,210,160,0.65)"; ctx.fillRect(x,y-hh,8,hh);
+        ctx.beginPath(); ctx.arc(x+4,y-hh-6,6,0,7); ctx.fillStyle="rgba(255,170,100,0.9)"; ctx.fill(); });
+      const g=ctx.createLinearGradient(0,h*0.2,0,h*0.8); g.addColorStop(0,"rgba(255,170,90,0)"); g.addColorStop(0.5,"rgba(255,170,90,0.14)"); g.addColorStop(1,"rgba(255,170,90,0)");
+      ctx.fillStyle=g; ctx.fillRect(0,0,w,h); },
+  ],
+
+  code: [
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,260,22,4,9); drawTraces(ctx,w,h,rnd,14,0.25); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,255,26,4,10); drawTraces(ctx,w,h,rnd,26,0.35);
+      scatterBand(ctx,w,h,rnd,8,0.3,0.8,(x,y,r)=>drawRack(ctx,x,y,14+r()*8,r)); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,250,30,3,10); drawTraces(ctx,w,h,rnd,46,0.45);
+      scatterBand(ctx,w,h,rnd,22,0.22,0.84,(x,y,r)=>drawRack(ctx,x,y,18+r()*12,r)); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,245,34,2,9); drawTraces(ctx,w,h,rnd,70,0.6);
+      scatterBand(ctx,w,h,rnd,40,0.15,0.9,(x,y,r)=>drawRack(ctx,x,y,16+r()*20,r,true));
+      const g=ctx.createLinearGradient(0,h*0.25,0,h*0.75); g.addColorStop(0,"rgba(160,120,255,0)"); g.addColorStop(0.5,"rgba(160,120,255,0.10)"); g.addColorStop(1,"rgba(160,120,255,0)");
+      ctx.fillStyle=g; ctx.fillRect(0,0,w,h); },
+  ],
+
+  image: [
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,175,18,4,9);
+      scatterBand(ctx,w,h,rnd,8,0.3,0.8,(x,y,r)=>{ ctx.strokeStyle="rgba(140,230,210,0.35)"; ctx.strokeRect(x,y,8,8); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,172,22,4,10);
+      scatterBand(ctx,w,h,rnd,16,0.25,0.85,(x,y,r)=>{ ctx.strokeStyle="rgba(150,235,215,0.45)"; ctx.lineWidth=1.4; ctx.strokeRect(x,y,10+r()*4,10+r()*4);
+        ctx.fillStyle="rgba(255,220,150,0.4)"; ctx.beginPath(); ctx.arc(x+5,y+5,1.5,0,7); ctx.fill(); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,170,26,3,10);
+      scatterBand(ctx,w,h,rnd,32,0.16,0.9,(x,y,r)=>{ const s=12+r()*10; ctx.strokeStyle="rgba(160,240,220,0.55)"; ctx.lineWidth=1.6; ctx.strokeRect(x,y,s,s);
+        ctx.fillStyle="rgba(255,225,160,0.5)"; ctx.beginPath(); ctx.arc(x+s/2,y+s/2,2,0,7); ctx.fill(); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,168,30,2,9);
+      scatterBand(ctx,w,h,rnd,54,0.1,0.95,(x,y,r)=>{ const s=14+r()*16; ctx.strokeStyle="rgba(170,245,225,0.65)"; ctx.lineWidth=1.8; ctx.strokeRect(x,y,s,s);
+        ctx.fillStyle = r()>0.6 ? "rgba(255,235,180,0.8)" : "rgba(170,245,225,0.4)"; ctx.beginPath(); ctx.arc(x+s/2,y+s/2,2.4,0,7); ctx.fill(); });
+      const g=ctx.createLinearGradient(0,h*0.2,0,h*0.8); g.addColorStop(0,"rgba(120,255,225,0)"); g.addColorStop(0.5,"rgba(120,255,225,0.10)"); g.addColorStop(1,"rgba(120,255,225,0)");
+      ctx.fillStyle=g; ctx.fillRect(0,0,w,h); },
+  ],
+
+  video: [
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,340,18,4,9);
+      scatterBand(ctx,w,h,rnd,4,0.4,0.7,(x,y,r)=>{ ctx.fillStyle="rgba(255,140,170,0.4)"; ctx.fillRect(x,y,12,8); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,338,22,4,10);
+      scatterBand(ctx,w,h,rnd,10,0.3,0.78,(x,y,r)=>{ ctx.fillStyle="rgba(255,150,180,0.5)"; ctx.fillRect(x,y,18,12); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,336,26,3,10);
+      scatterBand(ctx,w,h,rnd,22,0.2,0.86,(x,y,r)=>{ ctx.fillStyle="rgba(255,160,190,0.58)"; ctx.fillRect(x,y,20+r()*10,14+r()*8);
+        ctx.fillStyle="rgba(255,255,255,0.5)"; ctx.fillRect(x+2,y+2,5,3); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,334,30,2,9);
+      scatterBand(ctx,w,h,rnd,42,0.1,0.93,(x,y,r)=>{ ctx.fillStyle="rgba(255,170,200,0.68)"; ctx.fillRect(x,y,22+r()*14,16+r()*10);
+        ctx.fillStyle = r()>0.5 ? "rgba(255,255,255,0.7)" : "rgba(120,220,255,0.6)"; ctx.fillRect(x+2,y+2,6,4); });
+      const g=ctx.createLinearGradient(0,h*0.2,0,h*0.8); g.addColorStop(0,"rgba(255,120,170,0)"); g.addColorStop(0.5,"rgba(255,120,170,0.16)"); g.addColorStop(1,"rgba(255,120,170,0)");
+      ctx.fillStyle=g; ctx.fillRect(0,0,w,h); },
+  ],
+
+  audio: [
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,48,20,4,9);
+      scatterBand(ctx,w,h,rnd,4,0.4,0.7,(x,y,r)=>drawSpeaker(ctx,x,y,12)); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,46,24,4,10);
+      scatterBand(ctx,w,h,rnd,11,0.3,0.78,(x,y,r)=>drawSpeaker(ctx,x,y,14+r()*5)); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,44,28,3,10);
+      scatterBand(ctx,w,h,rnd,26,0.2,0.86,(x,y,r)=>drawSpeaker(ctx,x,y,16+r()*10)); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,42,32,2,9);
+      scatterBand(ctx,w,h,rnd,46,0.1,0.93,(x,y,r)=>drawSpeaker(ctx,x,y,18+r()*14,true));
+      const g=ctx.createLinearGradient(0,h*0.2,0,h*0.8); g.addColorStop(0,"rgba(255,210,120,0)"); g.addColorStop(0.5,"rgba(255,210,120,0.16)"); g.addColorStop(1,"rgba(255,210,120,0)");
+      ctx.fillStyle=g; ctx.fillRect(0,0,w,h); },
+  ],
+
+  archive: [
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,35,16,4,9);
+      scatterBand(ctx,w,h,rnd,6,0.4,0.8,(x,y,r)=>{ ctx.fillStyle="rgba(212,170,110,0.35)"; ctx.fillRect(x,y,8,7); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,33,20,4,10);
+      scatterBand(ctx,w,h,rnd,14,0.3,0.85,(x,y,r)=>{ ctx.fillStyle="rgba(216,176,118,0.45)"; ctx.fillRect(x,y,10,9);
+        ctx.strokeStyle="rgba(140,100,60,0.5)"; ctx.strokeRect(x,y,10,9); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,31,24,3,10);
+      scatterBand(ctx,w,h,rnd,30,0.2,0.9,(x,y,r)=>{ ctx.fillStyle="rgba(220,182,126,0.55)"; ctx.fillRect(x,y,12+r()*4,11+r()*4);
+        ctx.strokeStyle="rgba(140,100,60,0.6)"; ctx.strokeRect(x,y,12,11); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,29,28,2,9);
+      scatterBand(ctx,w,h,rnd,52,0.12,0.95,(x,y,r)=>{ ctx.fillStyle="rgba(224,188,134,0.65)"; ctx.fillRect(x,y,14+r()*8,12+r()*8);
+        ctx.strokeStyle="rgba(150,108,64,0.7)"; ctx.strokeRect(x,y,14,12); }); },
+  ],
+
+  executable: [
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,0,18,4,8);
+      drawGear(ctx,w*0.5,h*0.5,9,rnd); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,358,22,4,9);
+      scatterBand(ctx,w,h,rnd,4,0.35,0.65,(x,y,r)=>drawGear(ctx,x,y,11+r()*4,r)); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,356,26,3,9);
+      scatterBand(ctx,w,h,rnd,12,0.22,0.82,(x,y,r)=>drawGear(ctx,x,y,13+r()*7,r));
+      for(let i=0;i<3;i++){ ctx.fillStyle="rgba(255,160,90,0.18)"; ctx.fillRect(rnd()*w,h*(0.3+rnd()*0.4),3,h*0.18); } },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,354,30,2,8);
+      scatterBand(ctx,w,h,rnd,22,0.15,0.9,(x,y,r)=>drawGear(ctx,x,y,15+r()*10,r));
+      for(let i=0;i<8;i++){ ctx.fillStyle="rgba(255,150,80,0.3)"; const x=rnd()*w; ctx.fillRect(x,h*(0.2+rnd()*0.5),4,h*0.3); }
+      const g=ctx.createLinearGradient(0,h*0.25,0,h*0.75); g.addColorStop(0,"rgba(255,90,90,0)"); g.addColorStop(0.5,"rgba(255,90,90,0.10)"); g.addColorStop(1,"rgba(255,90,90,0)");
+      ctx.fillStyle=g; ctx.fillRect(0,0,w,h); },
+  ],
+
+  shortcut: [
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,200,14,4,9);
+      scatterBand(ctx,w,h,rnd,3,0.4,0.65,(x,y,r)=>drawSign(ctx,x,y,11)); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,198,18,4,10);
+      scatterBand(ctx,w,h,rnd,9,0.3,0.72,(x,y,r)=>drawSign(ctx,x,y,13+r()*4)); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,196,22,3,10);
+      scatterBand(ctx,w,h,rnd,20,0.2,0.84,(x,y,r)=>drawSign(ctx,x,y,15+r()*6)); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,194,26,2,9);
+      scatterBand(ctx,w,h,rnd,36,0.1,0.92,(x,y,r)=>drawSign(ctx,x,y,17+r()*10,true));
+      const g=ctx.createLinearGradient(0,h*0.3,0,h*0.7); g.addColorStop(0,"rgba(140,180,220,0)"); g.addColorStop(0.5,"rgba(140,180,220,0.16)"); g.addColorStop(1,"rgba(140,180,220,0)");
+      ctx.fillStyle=g; ctx.fillRect(0,0,w,h); },
+  ],
+
+  font: [
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,265,18,4,9);
+      scatterBand(ctx,w,h,rnd,4,0.4,0.68,(x,y,r)=>{ ctx.fillStyle="rgba(210,180,255,0.45)"; ctx.font="20px serif"; ctx.fillText("A",x,y); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,263,22,4,10);
+      scatterBand(ctx,w,h,rnd,11,0.3,0.76,(x,y,r)=>{ ctx.fillStyle="rgba(215,185,255,0.5)"; ctx.font=(20+r()*8)+"px serif"; ctx.fillText(rnd()>0.5?"A":"a",x,y); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,261,26,3,10);
+      scatterBand(ctx,w,h,rnd,26,0.18,0.86,(x,y,r)=>{ ctx.fillStyle="rgba(220,190,255,0.6)"; ctx.font=(20+r()*12)+"px serif"; ctx.fillText("ABab"[Math.floor(r()*4)],x,y); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,259,30,2,9);
+      scatterBand(ctx,w,h,rnd,44,0.1,0.93,(x,y,r)=>{ ctx.fillStyle = r()>0.6?"rgba(255,225,255,0.75)":"rgba(225,195,255,0.65)"; ctx.font=(20+r()*18)+"px serif"; ctx.fillText("ABCabc"[Math.floor(r()*6)],x,y); });
+      const g=ctx.createLinearGradient(0,h*0.2,0,h*0.8); g.addColorStop(0,"rgba(190,140,255,0)"); g.addColorStop(0.5,"rgba(190,140,255,0.14)"); g.addColorStop(1,"rgba(190,140,255,0)");
+      ctx.fillStyle=g; ctx.fillRect(0,0,w,h); },
+  ],
+
+  data: [
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,25,18,4,9);
+      drawNode(ctx,w*0.5,h*0.5,9); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,23,22,4,10);
+      scatterBand(ctx,w,h,rnd,6,0.3,0.72,(x,y,r)=>drawNode(ctx,x,y,11+r()*5)); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,21,26,3,10);
+      scatterBand(ctx,w,h,rnd,16,0.2,0.85,(x,y,r)=>drawNode(ctx,x,y,13+r()*8)); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,19,30,2,9);
+      scatterBand(ctx,w,h,rnd,30,0.12,0.92,(x,y,r)=>drawNode(ctx,x,y,15+r()*12,true));
+      const g=ctx.createLinearGradient(0,h*0.2,0,h*0.8); g.addColorStop(0,"rgba(255,180,90,0)"); g.addColorStop(0.5,"rgba(255,180,90,0.12)"); g.addColorStop(1,"rgba(255,180,90,0)");
+      ctx.fillStyle=g; ctx.fillRect(0,0,w,h); },
+  ],
+
+  other: [
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,0,0,5,10);
+      scatterBand(ctx,w,h,rnd,8,0.35,0.75,(x,y,r)=>{ ctx.fillStyle="rgba(190,195,200,0.3)"; ctx.beginPath(); ctx.arc(x,y,2+r()*2,0,7); ctx.fill(); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,0,0,4,11);
+      scatterBand(ctx,w,h,rnd,12,0.3,0.8,(x,y,r)=>{ ctx.fillStyle="rgba(195,200,205,0.4)"; ctx.fillRect(x,y,9,8); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,0,0,3,11);
+      scatterBand(ctx,w,h,rnd,26,0.2,0.88,(x,y,r)=>{ ctx.fillStyle="rgba(200,205,210,0.5)"; ctx.fillRect(x,y,11+r()*4,10+r()*6); }); },
+    (ctx,w,h,rnd) => { baseSky(ctx,w,h,0,0,2,10);
+      scatterBand(ctx,w,h,rnd,48,0.12,0.93,(x,y,r)=>{ ctx.fillStyle="rgba(205,210,215,0.6)"; ctx.fillRect(x,y,13+r()*8,12+r()*10); }); },
+  ],
+};
+
+// ---- shared structure-drawing primitives used by multiple categories ----
+function drawTraces(ctx,w,h,rnd,count,alpha) {
+  ctx.strokeStyle = `rgba(150,120,255,${alpha})`; ctx.lineWidth = 1;
+  for (let i = 0; i < count; i++) {
+    let x = rnd() * w, y = rnd() * h;
+    ctx.beginPath(); ctx.moveTo(x, y);
+    for (let s = 0; s < 3; s++) { if (rnd() > 0.5) x += rnd() * 30 - 15; else y += rnd() * 30 - 15; ctx.lineTo(x, y); }
+    ctx.stroke();
+    ctx.fillStyle = `rgba(190,160,255,${alpha + 0.15})`;
+    ctx.beginPath(); ctx.arc(x, y, 1.4, 0, 7); ctx.fill();
+  }
+}
+function drawRack(ctx,x,y,size,rnd,lit) {
+  const w = size * 0.7, h = size;
+  ctx.fillStyle = "rgba(20,16,34,0.9)"; ctx.fillRect(x - w/2, y - h/2, w, h);
+  ctx.strokeStyle = "rgba(150,120,255,0.5)"; ctx.lineWidth = 0.6; ctx.strokeRect(x - w/2, y - h/2, w, h);
+  const slots = Math.floor(h / 4);
+  for (let i = 0; i < slots; i++) {
+    const sy = y - h/2 + i*4 + 1;
+    ctx.fillStyle = (lit && rnd() > 0.4) ? "rgba(255,200,120,0.9)" : "rgba(150,120,255,0.35)";
+    ctx.fillRect(x - w/2 + 1, sy, w - 2, 1.6);
+  }
+}
+function drawSpeaker(ctx,x,y,size,lit) {
+  ctx.fillStyle = "rgba(40,32,16,0.9)"; ctx.fillRect(x-size*0.35,y-size*0.5,size*0.7,size);
+  ctx.strokeStyle="rgba(255,225,140,0.5)"; ctx.lineWidth=0.6; ctx.strokeRect(x-size*0.35,y-size*0.5,size*0.7,size);
+  ctx.beginPath(); ctx.arc(x,y-size*0.15,size*0.22, 0,7);
+  ctx.fillStyle = lit ? "rgba(255,225,140,0.7)" : "rgba(255,225,140,0.35)"; ctx.fill();
+  ctx.beginPath(); ctx.arc(x,y+size*0.28,size*0.14, 0,7); ctx.fill();
+}
+function drawGear(ctx,x,y,r,rnd) {
+  ctx.strokeStyle="rgba(255,140,110,0.55)"; ctx.lineWidth=1.2;
+  ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.stroke();
+  const teeth=8;
+  for(let i=0;i<teeth;i++){ const a=(i/teeth)*Math.PI*2;
+    ctx.beginPath(); ctx.moveTo(x+Math.cos(a)*r, y+Math.sin(a)*r); ctx.lineTo(x+Math.cos(a)*(r+3), y+Math.sin(a)*(r+3)); ctx.stroke(); }
+  ctx.beginPath(); ctx.arc(x,y,r*0.35,0,7); ctx.fillStyle="rgba(255,120,90,0.4)"; ctx.fill();
+}
+function drawSign(ctx,x,y,size,lit) {
+  ctx.strokeStyle="rgba(170,190,210,0.55)"; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x,y-size); ctx.lineTo(x,y+size*0.3); ctx.stroke();
+  ctx.fillStyle = lit ? "rgba(255,210,150,0.7)" : "rgba(170,190,210,0.45)";
+  ctx.fillRect(x+1, y-size, size*0.9, size*0.28);
+  ctx.fillRect(x+1, y-size*0.6, size*0.7, size*0.24);
+}
+function drawNode(ctx,x,y,size,lit) {
+  ctx.fillStyle="rgba(30,24,14,0.9)"; ctx.fillRect(x-size*0.4,y-size*0.5,size*0.8,size);
+  ctx.strokeStyle="rgba(255,180,90,0.55)"; ctx.lineWidth=0.6; ctx.strokeRect(x-size*0.4,y-size*0.5,size*0.8,size);
+  for(let i=0;i<3;i++){ ctx.fillStyle = lit ? "rgba(120,255,170,0.8)" : "rgba(255,180,90,0.4)"; ctx.beginPath(); ctx.arc(x-size*0.25,y-size*0.3+i*size*0.3,1.4,0,7); ctx.fill(); }
+}
+
+// ============================================================================
+// USE-STAGE (decay) GENERATORS — these are overlays, drawn on top of the age
+// base texture. Each is intentionally category-agnostic in TECHNIQUE but the
+// caller passes per-category accent colors so e.g. "code" rusts violet-grey
+// while "archive" rusts brown -- giving 13 distinct bespoke overlay sets from
+// a shared set of draw routines (still fully independent images once baked).
+// ============================================================================
+
+function decayActive(ctx, w, h, rnd, accent) { /* no-op: clean */ }
+
+function decayQuiet(ctx, w, h, rnd, accent) {
+  ctx.fillStyle = "rgba(8,7,5,0.22)"; ctx.fillRect(0, 0, w, h);
+  for (let i = 0; i < 60; i++) {
+    ctx.fillStyle = accent.dust; const x = rnd()*w, y = rnd()*h;
+    ctx.fillRect(x, y, 2.4, 2.4);
+  }
+}
+
+function decayNeglected(ctx, w, h, rnd, accent) {
+  ctx.fillStyle = "rgba(8,7,5,0.42)"; ctx.fillRect(0, 0, w, h);
+  for (let i = 0; i < 14; i++) {
+    ctx.strokeStyle = "rgba(0,0,0,0.7)"; ctx.lineWidth = 1.3;
+    let x = rnd()*w, y = rnd()*h; ctx.beginPath(); ctx.moveTo(x, y);
+    for (let s = 0; s < 5; s++) { x += rnd()*24-12; y += rnd()*24-12; ctx.lineTo(x, y); }
+    ctx.stroke();
+  }
+  for (let i = 0; i < 100; i++) {
+    ctx.fillStyle = accent.rust; const x = rnd()*w, y = rnd()*h;
+    ctx.fillRect(x, y, 3, 3);
+  }
+}
+
+function decayDerelict(ctx, w, h, rnd, accent) {
+  ctx.fillStyle = "rgba(6,5,4,0.62)"; ctx.fillRect(0, 0, w, h);
+  for (let i = 0; i < 28; i++) {
+    ctx.strokeStyle = "rgba(0,0,0,0.82)"; ctx.lineWidth = 1.5;
+    let x = rnd()*w, y = rnd()*h; ctx.beginPath(); ctx.moveTo(x, y);
+    for (let s = 0; s < 7; s++) { x += rnd()*30-15; y += rnd()*30-15; ctx.lineTo(x, y); }
+    ctx.stroke();
+  }
+  for (let i = 0; i < 160; i++) {
+    ctx.fillStyle = accent.rust2; const x = rnd()*w, y = rnd()*h;
+    ctx.fillRect(x, y, 3.5, 3.5);
+  }
+  for (let i = 0; i < 8; i++) {
+    const x = rnd()*w, y = rnd()*h, r = 22+rnd()*34;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, "rgba(0,0,0,0.78)"); g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g; ctx.fillRect(x-r, y-r, r*2, r*2);
+  }
+}
+
+const USE_GENERATORS = [decayActive, decayQuiet, decayNeglected, decayDerelict];
+
+// per-category decay accent palette (what color the rust/dust reads as)
+const DECAY_ACCENTS = {
+  document:    { dust:"rgba(150,130,100,0.3)", rust:"rgba(170,120,60,0.42)",  rust2:"rgba(180,130,65,0.5)" },
+  spreadsheet: { dust:"rgba(120,140,110,0.3)", rust:"rgba(150,150,70,0.42)",  rust2:"rgba(160,150,75,0.5)" },
+  presentation:{ dust:"rgba(150,130,100,0.3)", rust:"rgba(180,110,60,0.42)",  rust2:"rgba(190,115,65,0.5)" },
+  code:        { dust:"rgba(120,110,140,0.3)", rust:"rgba(150,100,160,0.4)", rust2:"rgba(160,105,170,0.48)" },
+  image:       { dust:"rgba(110,140,135,0.3)", rust:"rgba(140,150,110,0.4)", rust2:"rgba(150,155,115,0.48)" },
+  video:       { dust:"rgba(140,110,125,0.3)", rust:"rgba(170,90,110,0.42)",  rust2:"rgba(180,95,115,0.5)" },
+  audio:       { dust:"rgba(140,130,100,0.3)", rust:"rgba(170,140,70,0.42)",  rust2:"rgba(180,145,75,0.5)" },
+  archive:     { dust:"rgba(140,120,90,0.3)",  rust:"rgba(170,110,55,0.45)",  rust2:"rgba(185,115,58,0.55)" },
+  executable:  { dust:"rgba(140,100,95,0.3)",  rust:"rgba(180,80,60,0.45)",   rust2:"rgba(195,85,62,0.55)" },
+  shortcut:    { dust:"rgba(110,125,140,0.3)", rust:"rgba(130,140,160,0.4)",  rust2:"rgba(140,145,165,0.48)" },
+  font:        { dust:"rgba(130,115,140,0.3)", rust:"rgba(150,110,160,0.4)",  rust2:"rgba(160,115,170,0.48)" },
+  data:        { dust:"rgba(140,120,95,0.3)",  rust:"rgba(180,120,60,0.45)",  rust2:"rgba(195,125,62,0.55)" },
+  other:       { dust:"rgba(140,140,140,0.3)", rust:"rgba(160,140,110,0.4)",  rust2:"rgba(170,145,115,0.48)" },
+};
+
+// ============================================================================
+// PUBLIC API
+// ============================================================================
+
+const TEX_W = 1024, TEX_H = 512;
+const _textureCache = new Map(); // key: "category|age|use" -> THREE.CanvasTexture
+const _loadedImageCache = new Map(); // key: "category|age|kind" -> Image or null (404)
+
+function categoryFallback(category) {
+  return AGE_GENERATORS[category] ? category : "other";
+}
+
+// Attempts to load a real PNG asset; resolves null on failure (caller falls
+// back to the procedural generator). kind is "age" or "use".
+function tryLoadImage(category, kind, stageIdx) {
+  const key = `${category}|${kind}|${stageIdx}`;
+  if (_loadedImageCache.has(key)) return Promise.resolve(_loadedImageCache.get(key));
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => { _loadedImageCache.set(key, img); resolve(img); };
+    img.onerror = () => { _loadedImageCache.set(key, null); resolve(null); };
+    img.src = `/textures/${category}/${kind}_${stageIdx}.png`;
+  });
+}
+
+function drawProceduralAge(ctx, category, ageIdx, seed) {
+  const cat = categoryFallback(category);
+  const fn = AGE_GENERATORS[cat][ageIdx];
+  fn(ctx, TEX_W, TEX_H, mulberry32(seed));
+}
+function drawProceduralUse(ctx, category, useIdx, seed) {
+  const fn = USE_GENERATORS[useIdx];
+  const accent = DECAY_ACCENTS[categoryFallback(category)] || DECAY_ACCENTS.other;
+  fn(ctx, TEX_W, TEX_H, mulberry32(seed), accent);
+}
+
+// Builds (or returns cached) a THREE.CanvasTexture for the given category +
+// age stage + use stage, compositing age-base and decay-overlay. seed keeps
+// the procedural look stable per-category (not per-file) so re-scans don't
+// visually "flicker" the surface pattern.
+function getPlanetTexture(category, ageIdx, useIdx, seedSalt) {
+  ageIdx = Math.max(0, Math.min(3, ageIdx|0));
+  useIdx = Math.max(0, Math.min(3, useIdx|0));
+  const cat = categoryFallback(category);
+  const key = `${cat}|${ageIdx}|${useIdx}`;
+  if (_textureCache.has(key)) return _textureCache.get(key);
+
+  const canvas = makeCanvas(TEX_W, TEX_H);
+  const ctx = canvas.getContext("2d");
+  const seed = (hash01(cat) * 1e6 + ageIdx * 97 + useIdx * 13 + (seedSalt||0)) | 0;
+
+  // base age layer (procedural now; real PNG swap happens in upgradeTextureWithRealAssets)
+  drawProceduralAge(ctx, cat, ageIdx, seed);
+  // decay overlay on top
+  drawProceduralUse(ctx, cat, useIdx, seed);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
+  _textureCache.set(key, tex);
+
+  // kick off real-asset upgrade in the background; swaps canvas content +
+  // calls tex.needsUpdate=true if/when real PNGs are found, with zero
+  // disruption if they 404 (procedural result already showing).
+  upgradeTextureWithRealAssets(cat, ageIdx, useIdx, canvas, tex);
+
+  return tex;
+}
+
+function upgradeTextureWithRealAssets(category, ageIdx, useIdx, canvas, tex) {
+  Promise.all([
+    tryLoadImage(category, "age", ageIdx),
+    tryLoadImage(category, "use", useIdx),
+  ]).then(function (results) {
+    const ageImg = results[0], useImg = results[1];
+    if (!ageImg && !useImg) return; // both 404 — keep fully procedural result
+    const ctx = canvas.getContext("2d");
+    if (ageImg) { ctx.clearRect(0,0,TEX_W,TEX_H); ctx.drawImage(ageImg, 0, 0, TEX_W, TEX_H); }
+    else { drawProceduralAge(ctx, category, ageIdx, 1); } // real use-overlay but no real age art yet
+    if (useImg) { ctx.drawImage(useImg, 0, 0, TEX_W, TEX_H); }
+    else { drawProceduralUse(ctx, category, useIdx, 1); }
+    tex.needsUpdate = true;
+  });
+}
+
+function hash01(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return ((h >>> 0) % 100000) / 100000;
+}
+
+// Resolve an ageDays/idleDays value to a 0..3 stage index using the SAME
+// thresholds philosophy as scan.py's age_stages (kept here only as a visual
+// fallback if the server ever omits the precomputed stage name; the server's
+// ageStage/useStage strings are authoritative when present).
+const AGE_STAGE_DAYS = [5, 30, 360]; // upper bound of stage 0,1,2; stage 3 = beyond
+const USE_STAGE_DAYS = [3, 14, 60];
+function stageIndexFromDays(days, thresholds) {
+  for (let i = 0; i < thresholds.length; i++) if (days <= thresholds[i]) return i;
+  return thresholds.length;
+}
+
+window.BangPlanetTextures = {
+  STAGE_NAMES, getPlanetTexture, stageIndexFromDays, AGE_STAGE_DAYS, USE_STAGE_DAYS,
+  TEX_W, TEX_H,
+};
+
+</script>
+<script>
+(function(){
+  if(!window.THREE){ const e=document.getElementById("err"); e.style.display="flex";
+    e.textContent="Three.js failed to load. Check the Pi's network and refresh."; return; }
+
+  const API="/api/scan";
+  let HOME=null;  // resolved at boot from /api/home — no machine-specific path is assumed
+
+  // central live-tunable visual settings — every visual reads from here.
+  // These starting values are only a FALLBACK in case style.json can't be
+  // reached at boot; the real values are loaded from the backend in boot()
+  // and immediately overwrite this object before the universe renders.
+  const CFG={
+    galaxyGlow:0.01, galaxyHalo:5.3, galaxyPoint:0.35, galaxyHaloOp:0.34,
+    bodyGloss:0.26, bodyRim:0, bodyEmissive:0, bodyScale:0.68,
+    fog:1.15, stars:2, core:0.85,
+    speed:2.19, orbitOp:0.06, trailOp:0.6, trailLen:2.44
+  };
+  let STYLE=null; // the full style.json document, loaded once at boot and kept in sync with the settings panel
+  const canvas=document.getElementById("gl");
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  renderer.setSize(window.innerWidth,window.innerHeight);
+
+  const scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x04050a);
+  scene.fog=new THREE.FogExp2(0x04050a,0.00028);
+  const camera=new THREE.PerspectiveCamera(60,window.innerWidth/window.innerHeight,0.1,12000);
+  camera.position.set(0,240,620);
+
+  // ---- helpers ----
+  // Any string that originated from the filesystem (file/folder names,
+  // paths) or from style.json (category keys, stage names) is untrusted —
+  // a file can be named literally anything, including HTML. Every place
+  // that builds HTML via string concatenation + innerHTML must run such
+  // strings through this first, or a cleverly-named file/folder executes
+  // arbitrary script the moment its Command panel (or a settings row) opens.
+  function escapeHtml(s){
+    return String(s==null?"":s).replace(/[&<>"']/g, c => ({
+      "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+    }[c]));
+  }
+  function hash01(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return ((h>>>0)%100000)/100000; }
+  function mulberry(seed){ let a=seed>>>0; return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  // Color for any real, backend-scanned node (file or folder) always comes
+  // from server.py's tint field — scan.py is the single source of truth for
+  // file-type colors now, so the frontend doesn't keep its own copy that can
+  // drift out of sync.
+  function tintOf(d){
+    if(d && d.tint){ const m=d.tint.match(/(\d+),(\d+),(\d+)/); if(m) return ((+m[1])<<16)|((+m[2])<<8)|(+m[3]); }
+    return 0x8fd0ff;
+  }
+  // Small local guess used ONLY for the create-staging preview, where the
+  // person is typing a filename that doesn't exist on disk yet, so there's
+  // no backend node to ask for a real tint. Deliberately tiny — this never
+  // needs to cover every extension, just give a plausible preview color.
+  const PREVIEW_GUESS={ py:0xb07cff,txt:0xffd95e,md:0x6fb1ff,json:0xff9d4d,jpg:0x48d6c0,jpeg:0x48d6c0,
+    png:0x48d6c0,mp3:0xffd95e,mp4:0xff6b8a,zip:0xd4a24c,exe:0xff5d5d,docx:0x6fb1ff,xlsx:0x78db96,pdf:0x6fb1ff };
+  function previewGuessColor(name){ const m=name.toLowerCase().match(/\.([a-z0-9]+)$/); return (m&&PREVIEW_GUESS[m[1]])||0xcdd6e0; }
+
+  // Parallel category guess for the create-staging preview's texture family
+  // — mirrors scan.py's EXT_CATEGORY at a glance, not exhaustively (falls
+  // back to "other" for anything not listed, same as the real backend does
+  // for genuinely unknown extensions).
+  const PREVIEW_CATEGORY={ py:"code",js:"code",ts:"code",html:"code",css:"code",json:"code",
+    txt:"document",md:"document",pdf:"document",doc:"document",docx:"document",
+    xls:"spreadsheet",xlsx:"spreadsheet",csv:"spreadsheet",
+    ppt:"presentation",pptx:"presentation",key:"presentation",
+    jpg:"image",jpeg:"image",png:"image",gif:"image",svg:"image",webp:"image",
+    mp4:"video",mov:"video",mkv:"video",
+    mp3:"audio",wav:"audio",flac:"audio",
+    zip:"archive",tar:"archive",gz:"archive","7z":"archive",
+    exe:"executable",msi:"executable",sh:"executable",bat:"executable",
+    lnk:"shortcut",url:"shortcut",
+    ttf:"font",otf:"font",woff:"font",
+    db:"data",sqlite:"data",dat:"data" };
+  function previewGuessCategory(name){ const m=name.toLowerCase().match(/\.([a-z0-9]+)$/); return (m&&PREVIEW_CATEGORY[m[1]])||"other"; }
+
+  // soft radial-glow sprite — makes every point render as a luminous mote (no hard squares)
+  const GLOW_TEX=(function(){ const c=document.createElement("canvas");c.width=c.height=64;const g=c.getContext("2d");
+    const rg=g.createRadialGradient(32,32,0,32,32,32);
+    rg.addColorStop(0,"rgba(255,255,255,1)"); rg.addColorStop(0.25,"rgba(255,255,255,0.85)");
+    rg.addColorStop(0.55,"rgba(255,255,255,0.35)"); rg.addColorStop(1,"rgba(255,255,255,0)");
+    g.fillStyle=rg; g.fillRect(0,0,64,64); return new THREE.CanvasTexture(c); })();
+
+  // ---- nebula + stars (from step 1) ----
+  function nebulaTex(){ const c=document.createElement("canvas");c.width=1024;c.height=512;const g=c.getContext("2d");
+    g.fillStyle="#04050a";g.fillRect(0,0,1024,512);
+    [["rgba(80,50,150,0.18)",250,180,260],["rgba(30,90,140,0.16)",760,330,300],["rgba(120,40,90,0.12)",560,110,200],["rgba(40,70,130,0.12)",150,400,220]]
+    .forEach(b=>{const rg=g.createRadialGradient(b[1],b[2],0,b[1],b[2],b[3]);rg.addColorStop(0,b[0]);rg.addColorStop(1,"rgba(0,0,0,0)");g.fillStyle=rg;g.fillRect(0,0,1024,512);});
+    return new THREE.CanvasTexture(c); }
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(8000,32,16),new THREE.MeshBasicMaterial({map:nebulaTex(),side:THREE.BackSide,depthWrite:false})));
+  const starMats=[];
+  function makeStars(count,rMin,rMax){ const geo=new THREE.BufferGeometry();const pos=new Float32Array(count*3);const col=new Float32Array(count*3);
+    for(let i=0;i<count;i++){const u=Math.random(),v=Math.random();const th=u*Math.PI*2,ph=Math.acos(2*v-1);const r=rMin+Math.random()*(rMax-rMin);
+      pos[i*3]=r*Math.sin(ph)*Math.cos(th);pos[i*3+1]=r*Math.sin(ph)*Math.sin(th);pos[i*3+2]=r*Math.cos(ph);
+      const w=0.6+Math.random()*0.4;col[i*3]=0.8*w;col[i*3+1]=0.9*w;col[i*3+2]=w;}
+    geo.setAttribute("position",new THREE.BufferAttribute(pos,3));geo.setAttribute("color",new THREE.BufferAttribute(col,3));
+    const m=new THREE.PointsMaterial({size:6,map:GLOW_TEX,vertexColors:true,sizeAttenuation:true,transparent:true,opacity:CFG.stars,depthWrite:false,blending:THREE.AdditiveBlending});
+    starMats.push(m); return new THREE.Points(geo,m); }
+  scene.add(makeStars(2600,1500,6500)); scene.add(makeStars(900,600,1500));
+
+  // ---- bang core: a radiant star, doubling as the "current folder" marker.
+  // Same label styling as planets/galaxies; clicking it steps out one level,
+  // same as the "← Out" button — the core IS the folder you're standing in.
+  const coreGroup=new THREE.Group();
+  const coreSolid1=new THREE.Mesh(new THREE.SphereGeometry(15,40,28),new THREE.MeshBasicMaterial({color:0xfff4d6}));
+  const coreSolid2=new THREE.Mesh(new THREE.SphereGeometry(19,32,22),new THREE.MeshBasicMaterial({color:0xffd27a,transparent:true,opacity:0.55,depthWrite:false}));
+  coreGroup.add(coreSolid1); coreGroup.add(coreSolid2);
+  const coronaShells=[];
+  for(let i=0;i<4;i++){ const sh=new THREE.Mesh(new THREE.SphereGeometry(24+i*16,28,20),
+      new THREE.MeshBasicMaterial({color:i<2?0xffb45a:0xff8a3a,transparent:true,opacity:0.14-i*0.028,depthWrite:false}));
+    coreGroup.add(sh); coronaShells.push(sh); sh.userData.skipRaycast=true; } // glow shells, not the clickable "surface"
+  function glowSprite(){ const c=document.createElement("canvas");c.width=c.height=128;const g=c.getContext("2d");
+    const rg=g.createRadialGradient(64,64,0,64,64,64); rg.addColorStop(0,"rgba(255,240,200,0.9)");
+    rg.addColorStop(0.3,"rgba(255,180,90,0.5)"); rg.addColorStop(1,"rgba(255,140,60,0)");
+    g.fillStyle=rg; g.fillRect(0,0,128,128); return new THREE.CanvasTexture(c); }
+  const halo=new THREE.Sprite(new THREE.SpriteMaterial({map:glowSprite(),transparent:true,opacity:0.85,depthWrite:false,blending:THREE.AdditiveBlending}));
+  halo.scale.set(160,160,1); coreGroup.add(halo);
+  halo.userData.skipRaycast=true; // huge, mostly-transparent bloom — not the clickable "surface"
+  coreGroup.traverse(o=>{ if(!o.userData.skipRaycast) o.userData.isCore=true; });
+  scene.add(coreGroup);
+  const coreLab=document.createElement("div"); coreLab.className="lab"; coreLab.id="core-lab";
+  coreLab.style.color="#ffd27a";
+  document.getElementById("labels").appendChild(coreLab);
+  function coreLabelText(path){
+    if(!path) return "/";
+    const parts=path.replace(/\\/g,"/").split("/").filter(Boolean);
+    return parts.length ? parts[parts.length-1] : "/";
+  }
+
+  // ---- node container ----
+  let nodeGroup=new THREE.Group(); scene.add(nodeGroup);
+  let nodes=[];                 // {data, mesh|points, orbit params}
+  let currentPath=HOME, showVoid=false, speedMul=1;
+  let freezeUntil=0, inspectNode=null;   // inspect-mode freeze
+  const sphereGeo=new THREE.SphereGeometry(1,16,12);  // legacy, used for galaxy core sprites
+  const _sharedGeos=new Set([sphereGeo]);
+
+  function clearNodes(){
+    for(const n of nodes){ if(n.obj){ nodeGroup.remove(n.obj);
+      n.obj.traverse(o=>{ if(o.geometry && !_sharedGeos.has(o.geometry)) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
+      if(n.lab) n.lab.remove(); if(n.trail){ nodeGroup.remove(n.trail); n.trail.geometry.dispose(); n.trail.material.dispose(); } }
+    nodes=[];
+  }
+
+  function massBytes(d){ return d.type==="planet" ? (d.weight||0) : (d.size||0); }
+
+  // ---- evolutionary scale: bytes -> integer step 0..50 (log scale, 4KB..25MB) ----
+  // Ceiling lowered from the original 10GB: very few single files are
+  // anywhere near that size, which meant almost everything piled up in the
+  // bottom few buckets and "large planet" / "mature giant" tiers were
+  // effectively unreachable for normal files. 25MB puts realistic large
+  // files (videos, archives, datasets) at or near the top of the scale.
+  const EVO_MIN_LOG = Math.log10(4096);          // 4 KB
+  const EVO_MAX_LOG = Math.log10(25*1024*1024);  // 25 MB
+  function getEvolutionStep(bytes){
+    const l = Math.log10(Math.max(1,bytes));
+    const f = (l - EVO_MIN_LOG) / (EVO_MAX_LOG - EVO_MIN_LOG);
+    return Math.max(0, Math.min(50, Math.round(f*50)));
+  }
+
+  const _geoCache={};
+  function evoBucket(step){
+    if(step<=6)  return 0;   // asteroid / pebble
+    if(step<=14) return 1;   // rocky
+    if(step<=24) return 2;   // small planet
+    if(step<=34) return 3;   // planet
+    if(step<=44) return 4;   // large planet
+    return 5;                // mature giant
+  }
+  function getGeometryForStep(step){
+    const b=evoBucket(step);
+    if(_geoCache[b]) return _geoCache[b];
+    let g;
+    if(b<=1) g=new THREE.SphereGeometry(1,28,20);       // small but smooth
+    else if(b<=3) g=new THREE.SphereGeometry(1,36,26);
+    else g=new THREE.SphereGeometry(1,48,34);           // large, very round
+    _geoCache[b]=g; _sharedGeos.add(g); return g;
+  }
+
+  // Surface texture is now driven by the PLANET TEXTURE SYSTEM (see the
+  // embedded planet-textures.js module above): two independent axes,
+  // AGE (how built-up the category's "civilization" looks) and USE (a decay
+  // overlay for how long the file's been idle), composited into one
+  // equirectangular map and applied as the sphere's material.map. This
+  // replaces the old bolted-on sphere-scatter glyphs, which read as discrete
+  // "electrons" rather than a real surface the longer a file aged.
+  //
+  // Rings / moons / atmosphere are still driven by SIZE (the evolution
+  // tier) — unrelated to age/use, these read as "how big/mature is this
+  // body" and are layered on top of the new textured sphere.
+  function addSizeFeatures(obj, step, radius, color, seed){
+    const rnd=mulberry(seed^0x9e37);
+    const b=evoBucket(step);
+    if(b>=4){
+      const ring=new THREE.Mesh(new THREE.RingGeometry(1.5,2.2,40),
+        new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.4, side:THREE.DoubleSide, depthWrite:false}));
+      ring.rotation.x=Math.PI/2 - (0.3+rnd()*0.5);
+      obj.add(ring);
+    }
+    if(b>=5){
+      const moons=1+Math.floor(rnd()*2);
+      for(let i=0;i<moons;i++){
+        const moon=new THREE.Mesh(new THREE.SphereGeometry(0.22+rnd()*0.12,18,14),
+          new THREE.MeshStandardMaterial({color:0xcfd6e0, emissive:0x223044, emissiveIntensity:0.3, roughness:0.4, metalness:0.2, flatShading:false}));
+        const md=2.6+rnd()*1.2, ma=rnd()*Math.PI*2, mt=(rnd()-0.5);
+        moon.userData.moon={d:md,a:ma,t:mt,spd:0.01+rnd()*0.02};
+        obj.add(moon);
+        if(!obj.userData.moons) obj.userData.moons=[];
+        obj.userData.moons.push(moon);
+      }
+    }
+    if(b>=3){
+      const atm=new THREE.Mesh(new THREE.SphereGeometry(1.18,20,14),
+        new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.12, depthWrite:false}));
+      obj.add(atm);
+    }
+  }
+
+  // Resolves a file node's category for texture purposes. Server now sends
+  // an explicit `category` field for files; folders don't have one (they're
+  // rendered as galaxies via buildGalaxyPoints, not this textured-sphere
+  // path), so category is only ever read for satellite/file nodes.
+  function categoryOf(d){ return d.category || "other"; }
+
+  // Maps a node's ageStage/useStage NAME (e.g. "bare", "derelict" — these
+  // come from style.json's age_stages/use_stages and are authoritative) to
+  // the 0..3 index the texture module expects. Falls back to day-threshold
+  // bucketing if a stage name is missing or unrecognized (e.g. preview
+  // objects that don't have real server data yet).
+  function ageStageIndex(d){
+    const i = window.BangPlanetTextures.STAGE_NAMES.age.indexOf(d.agePattern);
+    if(i>=0) return i;
+    return window.BangPlanetTextures.stageIndexFromDays(d.ageDays||0, window.BangPlanetTextures.AGE_STAGE_DAYS);
+  }
+  function useStageIndex(d){
+    const i = window.BangPlanetTextures.STAGE_NAMES.use.indexOf(d.usePattern);
+    if(i>=0) return i;
+    return window.BangPlanetTextures.stageIndexFromDays(d.idleDays||0, window.BangPlanetTextures.USE_STAGE_DAYS);
+  }
+
+  // ---- galaxy composition: each speck is a real, individually placed/colored point ----
+  // (fixes the 3D regression where composition was lost to random palette resampling)
+  function buildGalaxyPoints(d, radius, color){
+    const specks = (d.specks && d.specks.length) ? d.specks : null;
+    const cr=((color>>16)&255)/255, cg=((color>>8)&255)/255, cb=(color&255)/255;
+    const rnd=mulberry(Math.floor(hash01(d.name)*1e9));
+
+    // background ambient dust — gives the cluster volume/glow independent of actual file count
+    const dustCnt = Math.min(160, 30 + Math.floor(Math.log10((d.weight||0)+10)*30));
+    const dustGeo=new THREE.BufferGeometry(); const dustPos=new Float32Array(dustCnt*3); const dustCol=new Float32Array(dustCnt*3);
+    for(let i=0;i<dustCnt;i++){
+      const rr=radius*Math.pow(rnd(),1.8)*2.0;
+      const u=rnd(),v=rnd(); const th=u*Math.PI*2, ph=Math.acos(2*v-1);
+      dustPos[i*3]=rr*Math.sin(ph)*Math.cos(th); dustPos[i*3+1]=rr*Math.cos(ph)*0.4; dustPos[i*3+2]=rr*Math.sin(ph)*Math.sin(th);
+      const wob=0.7+rnd()*0.2;
+      dustCol[i*3]=cr*wob; dustCol[i*3+1]=cg*wob; dustCol[i*3+2]=cb*wob;
+    }
+    dustGeo.setAttribute("position",new THREE.BufferAttribute(dustPos,3));
+    dustGeo.setAttribute("color",new THREE.BufferAttribute(dustCol,3));
+    const dustPts=new THREE.Points(dustGeo,new THREE.PointsMaterial({size:Math.max(5,radius*CFG.galaxyPoint*6),map:GLOW_TEX,vertexColors:true,
+      sizeAttenuation:true,transparent:true,opacity:CFG.galaxyGlow*0.7,depthWrite:false,blending:THREE.AdditiveBlending}));
+    dustPts.userData.baseRadius=radius; dustPts.userData.isDust=true;
+
+    // real composition points — one per speck, true color, true kind (folder specks get a ring outline via a thin torus-ish ring sprite)
+    let realPts=null, realRings=null;
+    if(specks){
+      const cnt=specks.length;
+      const geo=new THREE.BufferGeometry(); const pos=new Float32Array(cnt*3); const col=new Float32Array(cnt*3); const sizes=new Float32Array(cnt);
+      const ringPositions=[]; const ringColors=[];
+      for(let i=0;i<cnt;i++){
+        const sp=specks[i];
+        const m=sp.color.match(/(\d+),(\d+),(\d+)/);
+        const pr=m?(+m[1])/255:cr, pg=m?(+m[2])/255:cg, pb=m?(+m[3])/255:cb;
+        // spiral-ish placement so individual specks are readably distributed rather than purely random overlap
+        const golden=2.399963229728653;
+        const rr=radius*1.3*Math.sqrt((i+0.5)/cnt);
+        const ang=i*golden + rnd()*0.3;
+        const elev=(rnd()-0.5)*radius*0.5;
+        pos[i*3]=rr*Math.cos(ang); pos[i*3+1]=elev; pos[i*3+2]=rr*Math.sin(ang);
+        col[i*3]=pr; col[i*3+1]=pg; col[i*3+2]=pb;
+        sizes[i]= sp.kind==="folder" ? 1.5 : 1.0;
+        if(sp.kind==="folder"){ ringPositions.push(pos[i*3],pos[i*3+1],pos[i*3+2]); ringColors.push(pr,pg,pb); }
+      }
+      geo.setAttribute("position",new THREE.BufferAttribute(pos,3));
+      geo.setAttribute("color",new THREE.BufferAttribute(col,3));
+      realPts=new THREE.Points(geo,new THREE.PointsMaterial({size:Math.max(9,radius*CFG.galaxyPoint*13),map:GLOW_TEX,vertexColors:true,
+        sizeAttenuation:true,transparent:true,opacity:Math.min(1,CFG.galaxyGlow*5+0.55),depthWrite:false,blending:THREE.AdditiveBlending}));
+      realPts.userData.baseRadius=radius; realPts.userData.isComposition=true;
+
+      if(ringPositions.length){
+        const rgeo=new THREE.BufferGeometry();
+        rgeo.setAttribute("position",new THREE.BufferAttribute(new Float32Array(ringPositions),3));
+        rgeo.setAttribute("color",new THREE.BufferAttribute(new Float32Array(ringColors),3));
+        realRings=new THREE.Points(rgeo,new THREE.PointsMaterial({size:Math.max(16,radius*CFG.galaxyPoint*22),map:GLOW_TEX,vertexColors:true,
+          sizeAttenuation:true,transparent:true,opacity:CFG.galaxyHaloOp*0.8,depthWrite:false,blending:THREE.AdditiveBlending}));
+        realRings.userData.baseRadius=radius; realRings.userData.isCompositionRing=true;
+      }
+    }
+
+    // soft halo bloom — the diffuse glow that makes the cluster read as light, not confetti
+    const haloTex=GLOW_TEX;
+    const cHex="#"+(("000000"+color.toString(16)).slice(-6));
+    const haloSp=new THREE.Sprite(new THREE.SpriteMaterial({map:haloTex,color:cHex,transparent:true,opacity:CFG.galaxyHaloOp,depthWrite:false,blending:THREE.AdditiveBlending}));
+    haloSp.scale.set(radius*CFG.galaxyHalo,radius*CFG.galaxyHalo,1); haloSp.userData.baseRadius=radius; haloSp.userData.isHalo=true;
+    const coreS=new THREE.Sprite(new THREE.SpriteMaterial({map:haloTex,color:0xffffff,transparent:true,opacity:0.55,depthWrite:false,blending:THREE.AdditiveBlending}));
+    coreS.scale.set(radius*2.4,radius*2.4,1);
+
+    const grp=new THREE.Group();
+    grp.add(haloSp); grp.add(dustPts);
+    if(realRings) grp.add(realRings);
+    if(realPts) grp.add(realPts);
+    grp.add(coreS);
+    grp.userData.isGalaxy=true;
+    return grp;
+  }
+
+  function layout(list){
+    let maxLog=1; for(const d of list){ const l=Math.log10(massBytes(d)+10); if(l>maxLog) maxLog=l; }
+    const out=[];
+    list.forEach((d,i)=>{
+      if(!showVoid && d.void) return;
+      const seed=Math.floor(hash01(d.name)*1e9); const rnd=mulberry(seed);
+      const mass=Math.log10(massBytes(d)+10)/maxLog;
+      const radius = (d.type==="planet"? 14:7) + Math.log10(massBytes(d)+10)*3.2;
+      const color = tintOf(d);
+      const a = 150 + (1-mass)*520 + rnd()*60;
+      const b = a*(0.6+rnd()*0.3);
+      const incl = Math.acos(rnd()*2-1) - Math.PI/2;   // uniform tilt across the full sphere, not biased toward the equator
+      const node = (rnd())*Math.PI*2;
+      const phase = (i/list.length)*Math.PI*2 + rnd()*0.6;
+      const dir = rnd()>0.5?1:-1;
+      const spd = dir*0.0016*Math.sqrt(300/a);
+      let obj, step=0;
+      if(d.type==="planet"){ obj=buildGalaxyPoints(d, radius, color); }
+      else {
+        step=getEvolutionStep(d.size||0);
+        const glow = (typeof d.glow === "number") ? d.glow : 1.0;
+        const category = categoryOf(d);
+        const tex = window.BangPlanetTextures.getPlanetTexture(category, ageStageIndex(d), useStageIndex(d));
+        const mat=new THREE.MeshStandardMaterial({map:tex, color:0xffffff, emissive:color,
+          emissiveIntensity:(0.16 - evoBucket(step)*0.015)*(CFG.bodyEmissive/0.5)*glow,
+          roughness:1-CFG.bodyGloss, metalness:0.15, flatShading:false});
+        obj=new THREE.Mesh(getGeometryForStep(step), mat); obj.scale.setScalar(radius*CFG.bodyScale);
+        obj.userData.baseRadius=radius; obj.userData.bodyMat=mat; obj.userData.evoStep=step; obj.userData.glow=glow;
+        const cHex="#"+(("000000"+color.toString(16)).slice(-6));
+        const rim=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW_TEX,color:cHex,transparent:true,opacity:CFG.bodyRim*glow,depthWrite:false,blending:THREE.AdditiveBlending}));
+        rim.scale.set(2.7,2.7,1); rim.userData.isRim=true;
+        obj.add(rim);
+        addSizeFeatures(obj, step, radius, color, seed);
+      }
+      obj.userData.idx=out.length;
+      nodeGroup.add(obj);
+      const lab=document.createElement("div"); lab.className="lab"; lab.textContent=d.name.slice(0,24);
+      lab.style.color = d.type==="planet" ? "#cfe8ff" : "#"+(("000000"+color.toString(16)).slice(-6));
+      document.getElementById("labels").appendChild(lab);
+      out.push({ data:d, obj, lab, a, b, incl, node, phase, spd, radius, color, step });
+    });
+    return out;
+  }
+
+  const keyLight=new THREE.PointLight(0xffffff,1.3,0); keyLight.position.set(0,0,0); scene.add(keyLight);
+  scene.add(new THREE.AmbientLight(0x99aacc,0.6));
+
+  let orbitGroup=new THREE.Group(); scene.add(orbitGroup);
+  function buildOrbitRing(n){
+    const seg=96; const pos=new Float32Array(seg*3);
+    for(let i=0;i<seg;i++){
+      const ang=(i/seg)*Math.PI*2;
+      let x=Math.cos(ang)*n.a, z=Math.sin(ang)*n.b, y=0;
+      const y1=y*Math.cos(n.incl)-z*Math.sin(n.incl);
+      const z1=y*Math.sin(n.incl)+z*Math.cos(n.incl);
+      const x2=x*Math.cos(n.node)+z1*Math.sin(n.node);
+      const z2=-x*Math.sin(n.node)+z1*Math.cos(n.node);
+      pos[i*3]=x2; pos[i*3+1]=y1; pos[i*3+2]=z2;
+    }
+    const geo=new THREE.BufferGeometry(); geo.setAttribute("position",new THREE.BufferAttribute(pos,3));
+    const c=n.data.type==="planet"? n.color : n.color;
+    const mat=new THREE.LineBasicMaterial({color:c, transparent:true, opacity:CFG.orbitOp});
+    const ll=new THREE.LineLoop(geo,mat); ll.userData.isOrbit=true; return ll;
+  }
+  function clearOrbits(){ while(orbitGroup.children.length){ const o=orbitGroup.children.pop(); o.geometry.dispose(); o.material.dispose(); orbitGroup.remove(o); } }
+
+  function attachTrail(n){
+    const baseLen = Math.max(8, Math.min(60, Math.round(Math.abs(n.spd)*9000 + n.radius*0.7)));
+    n.trailBase=baseLen; n.trailMax=Math.ceil(baseLen*2.5); n.trailPts=[];
+    const pos=new Float32Array(n.trailMax*3);
+    const geo=new THREE.BufferGeometry(); geo.setAttribute("position",new THREE.BufferAttribute(pos,3));
+    geo.setDrawRange(0,0);
+    const mat=new THREE.LineBasicMaterial({color:n.color, transparent:true, opacity:CFG.trailOp});
+    n.trail=new THREE.Line(geo,mat); n.trail.userData.isTrail=true; nodeGroup.add(n.trail);
+  }
+  function updateTrail(n,p){
+    if(!n.trail) return;
+    const want=Math.max(2, Math.round(n.trailBase*CFG.trailLen));
+    const cap=Math.min(n.trailMax, want);
+    n.trailPts.push(p.x,p.y,p.z);
+    if(n.trailPts.length > cap*3) n.trailPts.splice(0, n.trailPts.length - cap*3);
+    const arr=n.trail.geometry.attributes.position.array;
+    arr.set(n.trailPts);
+    n.trail.geometry.setDrawRange(0, n.trailPts.length/3);
+    n.trail.geometry.attributes.position.needsUpdate=true;
+  }
+
+  async function travel(path){
+    try{
+      const res=await fetch(API+"?path="+encodeURIComponent(path));
+      const data=await res.json();
+      currentPath=data.path;
+      coreLab.textContent=coreLabelText(data.path);
+      clearNodes();
+      clearOrbits();
+      nodes=layout(data.nodes||[]);
+      for(const n of nodes){ orbitGroup.add(buildOrbitRing(n)); attachTrail(n); }
+      document.getElementById("hud-count").textContent=(data.nodes||[]).length+" nodes";
+      document.getElementById("create-loc").textContent="in "+data.path;
+      target.set(0,0,0); dist=620; yaw=0; pitch=0.36; applyCamera();
+    }catch(e){ document.getElementById("hud-count").textContent="signal lost"; }
+  }
+
+  // ---- camera controls ----
+  const target=new THREE.Vector3(0,0,0);
+  let dist=camera.position.distanceTo(target);
+  let yaw=Math.atan2(camera.position.x,camera.position.z);
+  let pitch=Math.asin(camera.position.y/dist);
+  const DMIN=50,DMAX=7000;
+  function applyCamera(){
+    pitch=Math.max(-1.45,Math.min(1.45,pitch)); dist=Math.max(DMIN,Math.min(DMAX,dist));
+    camera.position.set(target.x+dist*Math.cos(pitch)*Math.sin(yaw), target.y+dist*Math.sin(pitch), target.z+dist*Math.cos(pitch)*Math.cos(yaw));
+    camera.lookAt(target);
+    document.getElementById("hud-cam").textContent="dist "+Math.round(dist);
+  }
+  applyCamera();
+  let mode=null,lx=0,ly=0;
+  canvas.addEventListener("mousedown",e=>{mode=(e.button===2||e.shiftKey)?"pan":"orbit";lx=e.clientX;ly=e.clientY;downX=e.clientX;downY=e.clientY;movedAmt=0;});
+  window.addEventListener("mouseup",e=>{ if(mode==="orbit"&&movedAmt<5) onTap(e.clientX,e.clientY); mode=null; });
+  window.addEventListener("mousemove",e=>{ if(!mode)return; const dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;movedAmt+=Math.abs(dx)+Math.abs(dy);
+    if(mode==="orbit"){yaw-=dx*0.005;pitch+=dy*0.005;} else pan(dx,dy); applyCamera(); });
+  canvas.addEventListener("contextmenu",e=>e.preventDefault());
+  canvas.addEventListener("wheel",e=>{e.preventDefault();dist*=(e.deltaY<0?0.9:1.1);applyCamera();},{passive:false});
+  let downX=0,downY=0,movedAmt=0;
+  function pan(dx,dy){ const right=new THREE.Vector3().setFromMatrixColumn(camera.matrix,0); const up=new THREE.Vector3().setFromMatrixColumn(camera.matrix,1);
+    const k=dist*0.0016; target.addScaledVector(right,-dx*k); target.addScaledVector(up,dy*k); }
+  let tmode=null,a0={x:0,y:0},a1={x:0,y:0},pinch0=0,tDown={x:0,y:0},tMoved=0;
+  canvas.addEventListener("touchstart",e=>{ if(e.touches.length===1){tmode="orbit";a0={x:e.touches[0].clientX,y:e.touches[0].clientY};tDown={...a0};tMoved=0;}
+    else if(e.touches.length===2){tmode="pinch";a0={x:e.touches[0].clientX,y:e.touches[0].clientY};a1={x:e.touches[1].clientX,y:e.touches[1].clientY};pinch0=Math.hypot(a1.x-a0.x,a1.y-a0.y);} },{passive:true});
+  canvas.addEventListener("touchmove",e=>{ if(tmode==="orbit"&&e.touches.length===1){const x=e.touches[0].clientX,y=e.touches[0].clientY;yaw-=(x-a0.x)*0.005;pitch+=(y-a0.y)*0.005;tMoved+=Math.abs(x-a0.x)+Math.abs(y-a0.y);a0={x,y};applyCamera();}
+    else if(tmode==="pinch"&&e.touches.length===2){const a={x:e.touches[0].clientX,y:e.touches[0].clientY},b={x:e.touches[1].clientX,y:e.touches[1].clientY};const d=Math.hypot(b.x-a.x,b.y-a.y);if(pinch0>0)dist*=pinch0/d;
+      const mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2},mid0={x:(a0.x+a1.x)/2,y:(a0.y+a1.y)/2};pan(mid.x-mid0.x,mid.y-mid0.y);pinch0=d;a0=a;a1=b;applyCamera();} },{passive:true});
+  canvas.addEventListener("touchend",e=>{ if(tmode==="orbit"&&tMoved<8) onTap(tDown.x,tDown.y); if(e.touches.length===0)tmode=null; },{passive:true});
+
+  // ---- picking (raycaster) ----
+  const ray=new THREE.Raycaster(); ray.params.Points.threshold=8;
+  // Computes the parent of a path correctly across platforms — in particular,
+  // a bare Windows drive letter like "C:" (no trailing backslash) is
+  // ambiguous to the OS: it resolves to that drive's CURRENT WORKING
+  // DIRECTORY, not its root. The old naive regex left exactly that bare
+  // "C:" behind once it stripped all the way up, which meant every
+  // subsequent "go up" silently sent "C:" to the server and Windows
+  // resolved it to wherever the Python process happened to be launched
+  // from — not the actual drive root. That's what caused the loop back to
+  // a fixed folder no matter where navigation started. This always
+  // normalizes to an explicit root ("C:\") before it's ever sent anywhere.
+  function parentOf(path){
+    if(/^[A-Za-z]:[\\/]?$/.test(path)) return null;     // already at a Windows drive root
+    if(path === "/") return null;                        // already at the Unix root
+    const trimmed = path.replace(/[\\/]+$/, "");
+    const parent = trimmed.replace(/[\\/][^\\/]+$/, "");
+    if(parent === trimmed) return null;                   // nothing left to strip
+    if(/^[A-Za-z]:$/.test(parent)) return parent + "\\";  // normalize bare drive letter to an explicit root
+    return parent || "/";
+  }
+  function goUpOneLevel(){
+    // Inside the chosen origin, "out" is bounded at HOME (can't leave your
+    // universe). With Void mode on, you can keep going all the way to the
+    // real drive root and browse the hidden system areas beyond it.
+    if(currentPath===HOME && !showVoid) return;
+    const parent=parentOf(currentPath);
+    if(parent===null) return; // genuinely at the top of this drive/filesystem — nowhere further up
+    travel(parent);
+  }
+  function pickNode(sx,sy){
+    const m=new THREE.Vector2((sx/window.innerWidth)*2-1, -(sy/window.innerHeight)*2+1);
+    ray.setFromCamera(m,camera);
+    const targets=[];
+    for(const n of nodes){ if(n.data.type==="planet"){ n.obj.children.forEach(c=>{c.userData.node=n;targets.push(c);}); } else { n.obj.userData.node=n; n.obj.traverse(o=>{o.userData.node=n;}); targets.push(n.obj); } }
+    coreGroup.children.forEach(c=>{ if(!c.userData.skipRaycast) targets.push(c); });
+    const hits=ray.intersectObjects(targets,true);
+    if(!hits.length) return null;
+    if(hits[0].object.userData.isCore) return "CORE";
+    return hits[0].object.userData.node;
+  }
+  function enterOrOpen(n){ if(!n) return; if(n.data.type==="planet") travel(n.data.path); else openFile(n.data); }
+
+  // =========================================================================
+  // Bang Systems Command — replaces old inspect(): mission-style analysis panel
+  // with a live rotating preview of the real object, full metadata, composition
+  // breakdown, and file-browser actions (open / rename / delete / move-copy).
+  // =========================================================================
+  const cmdEl=document.getElementById("cmd");
+  const cmdBody=document.getElementById("cmd-body");
+  const cmdStatus=document.getElementById("cmd-status");
+  let cmdActiveNode=null;
+
+  // isolated mini render pipeline for the preview viewport — totally separate
+  // scene/camera so it never interferes with the main universe.
+  const pvCanvas=document.getElementById("cmd-viewport");
+  const pvRenderer=new THREE.WebGLRenderer({canvas:pvCanvas,antialias:true,alpha:true});
+  pvRenderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  const pvScene=new THREE.Scene();
+  const pvCamera=new THREE.PerspectiveCamera(40,1,0.1,100);
+  pvCamera.position.set(0,0,7);
+  pvScene.add(new THREE.AmbientLight(0x99aacc,0.7));
+  const pvKey=new THREE.PointLight(0xffffff,1.6,0); pvKey.position.set(4,5,6); pvScene.add(pvKey);
+  const pvRim=new THREE.PointLight(0x6fb1ff,0.8,0); pvRim.position.set(-5,-2,-4); pvScene.add(pvRim);
+  let pvObj=null;
+  function pvClear(){ if(pvObj){ pvScene.remove(pvObj); pvObj.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); pvObj=null; } }
+  function pvSizeToCanvas(){
+    const w=pvCanvas.clientWidth||280, h=pvCanvas.clientHeight||170;
+    pvRenderer.setSize(w,h,false); pvCamera.aspect=w/h; pvCamera.updateProjectionMatrix();
+  }
+  // builds a standalone preview object (file or folder) given raw data — same
+  // generator functions the main universe uses, so the preview IS the real thing.
+  function buildPreviewObject(d){
+    const color = tintOf(d);
+    if(d.type==="planet"){
+      const grp=buildGalaxyPoints(d, 1.6, color);
+      return grp;
+    } else {
+      const step=getEvolutionStep(d.size||0);
+      const category = categoryOf(d);
+      const tex = window.BangPlanetTextures.getPlanetTexture(category, ageStageIndex(d), useStageIndex(d));
+      const mat=new THREE.MeshStandardMaterial({map:tex, color:0xffffff, emissive:color,
+        emissiveIntensity:(0.16 - evoBucket(step)*0.015)*(CFG.bodyEmissive/0.5||0.13),
+        roughness:1-CFG.bodyGloss, metalness:0.15, flatShading:false});
+      const obj=new THREE.Mesh(getGeometryForStep(step), mat);
+      obj.scale.setScalar(2.0);
+      addSizeFeatures(obj, step, 2.0, color, Math.floor(hash01(d.name||"untitled")*1e9));
+      return obj;
+    }
+  }
+  function pvShow(d){
+    pvClear();
+    pvObj=buildPreviewObject(d);
+    pvScene.add(pvObj);
+  }
+  let pvSpin=0;
+  function pvRenderFrame(){
+    pvSpin+=0.012;
+    if(pvObj){ pvObj.rotation.y=pvSpin; pvObj.rotation.x=Math.sin(pvSpin*0.4)*0.15; }
+    pvSizeToCanvas();
+    pvRenderer.render(pvScene,pvCamera);
+    requestAnimationFrame(pvRenderFrame);
+  }
+  pvRenderFrame();
+
+  function extOf(name){ const m=(name||"").match(/\.([a-z0-9]+)$/i); return m?m[1].toLowerCase():""; }
+  function fmtSize(b){ if(b<1024)return b+" B"; if(b<1048576)return (b/1024).toFixed(1)+" KB"; if(b<1073741824)return (b/1048576).toFixed(1)+" MB"; return (b/1073741824).toFixed(2)+" GB"; }
+  function hexOf(colorInt){ return "#"+(("000000"+colorInt.toString(16)).slice(-6)); }
+
+  function composeBody(n){
+    const d=n.data; const ext=extOf(d.name);
+    const sw=hexOf(n.color);
+    let rows='<div class="cmd-name"><span class="sw" style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:'+sw+'"></span>'+escapeHtml(d.name)+'</div>';
+    rows+='<div class="cmd-row"><span class="cmd-key">designation</span><span>'+(d.type==="planet"?"galaxy / folder":(ext?"."+ext+" planet":"planet / file"))+'</span></div>';
+    rows+='<div class="cmd-row"><span class="cmd-key">mass</span><span>'+fmtSize(d.type==="planet"?(d.weight||0):(d.size||0))+'</span></div>';
+    if(d.type==="planet") rows+='<div class="cmd-row"><span class="cmd-key">bodies in orbit</span><span>'+(d.count||0)+'</span></div>';
+    rows+='<div class="cmd-row"><span class="cmd-key">evolution tier</span><span>'+(d.type==="planet"?"—":evoBucketName(evoBucket(n.step)))+'</span></div>';
+    rows+='<div class="cmd-row"><span class="cmd-key">last contact</span><span>'+new Date((d.modified||0)*1000).toLocaleDateString()+'</span></div>';
+    rows+='<div class="cmd-row"><span class="cmd-key">path</span><span style="word-break:break-all;max-width:180px;font-size:9px;">'+escapeHtml(d.path)+'</span></div>';
+
+    // composition breakdown — only for galaxies, built straight from real specks
+    if(d.type==="planet" && d.specks && d.specks.length){
+      const tally={};
+      for(const sp of d.specks){ const key=sp.color+"|"+sp.kind; tally[key]=(tally[key]||0)+1; }
+      const entries=Object.entries(tally).sort((a,b)=>b[1]-a[1]).slice(0,8);
+      rows+='<div class="cmd-section"><div class="cmd-section-title">Composition Analysis</div>';
+      for(const [key,count] of entries){
+        const [col,kind]=key.split("|");
+        rows+='<div class="makeup-row"><span class="makeup-sw" style="background:'+col+'"></span>'+
+          '<span class="makeup-label">'+(kind==="folder"?"nested galaxy":"matter speck")+'</span>'+
+          '<span class="makeup-count">×'+count+'</span></div>';
+      }
+      rows+='</div>';
+    } else if(d.type!=="planet"){
+      rows+='<div class="cmd-section"><div class="cmd-section-title">Surface Analysis</div>'+
+        '<div class="cmd-row"><span class="cmd-key">extension</span><span>'+(ext?"."+ext:"none")+'</span></div>'+
+        '<div class="cmd-row"><span class="cmd-key">surface features</span><span>'+(evoBucket(n.step)>=1?"cratered":"smooth")+'</span></div>'+
+        '<div class="cmd-row"><span class="cmd-key">atmosphere</span><span>'+(evoBucket(n.step)>=3?"present":"none")+'</span></div>'+
+        '<div class="cmd-row"><span class="cmd-key">satellites</span><span>'+(evoBucket(n.step)>=5?"detected":"none")+'</span></div>'+
+        '</div>';
+    }
+
+    // rename field + actions
+    rows+='<div class="cmd-section"><div class="cmd-section-title">Command Actions</div>'+
+      '<input type="text" class="cmd-input" id="cmd-rename" value="'+escapeHtml(d.name)+'">'+
+      '<div class="cmd-actions">'+
+        '<button class="btn" id="cmd-act-open">'+(d.type==="planet"?"Enter":"Open")+'</button>'+
+        '<button class="btn" id="cmd-act-rename">Rename</button>'+
+        '<button class="btn" id="cmd-act-move">Move / Copy</button>'+
+        '<button class="btn danger" id="cmd-act-delete">Graveyard</button>'+
+      '</div></div>';
+    return rows;
+  }
+  function evoBucketName(b){ return ["pebble","rocky body","small planet","planet","large planet","mature giant"][b]||"unknown"; }
+
+  function inspect(n){
+    if(!n){ hideInspect(); return; }
+    inspectNode=n; cmdActiveNode=n; freezeUntil=performance.now()+2000;
+    cmdStatus.textContent="Analyzing remote body…";
+    pvShow(n.data);
+    cmdBody.innerHTML=composeBody(n);
+    cmdEl.classList.add("show");
+    setTimeout(()=>{ if(cmdActiveNode===n) cmdStatus.textContent="Analysis complete — link stable"; }, 650);
+    wireCmdActions(n);
+  }
+  function hideInspect(){ inspectNode=null; cmdActiveNode=null; cmdEl.classList.remove("show"); pvClear(); }
+  document.getElementById("cmd-close").onclick=hideInspect;
+
+  function wireCmdActions(n){
+    const d=n.data;
+    const openBtn=document.getElementById("cmd-act-open");
+    const renameBtn=document.getElementById("cmd-act-rename");
+    const moveBtn=document.getElementById("cmd-act-move");
+    const delBtn=document.getElementById("cmd-act-delete");
+    const renameInput=document.getElementById("cmd-rename");
+    if(openBtn) openBtn.onclick=()=>{ enterOrOpen(n); };
+    if(renameBtn) renameBtn.onclick=()=>{
+      const newName=(renameInput.value||"").trim();
+      if(!newName || newName===d.name){ return; }
+      fsOp("rename",{path:d.path,newName}).then(res=>{
+        if(res.ok){ showToast("Renamed to "+newName); hideInspect(); travel(currentPath); }
+        else showToast(res.msg||"Rename failed",true);
+      });
+    };
+    if(moveBtn) moveBtn.onclick=()=>{
+      const dest=prompt("Move/copy "+d.name+" to which directory? (full path)", currentPath);
+      if(!dest) return;
+      // Quick client-side sanity check so an obviously-outside destination
+      // gets immediate feedback instead of a round-trip to the server. This
+      // is a courtesy, not the real enforcement — the server's own
+      // is_within_root() check is authoritative and still runs regardless,
+      // since path normalization (case, trailing slashes, drive-letter
+      // formatting) can differ here from what the server considers
+      // canonical, and getting that wrong client-side should never be able
+      // to either block a valid op or falsely green-light an invalid one.
+      const destNorm=dest.trim().toLowerCase().replace(/[\\/]+$/,"");
+      const rootNorm=(HOME||"").toLowerCase().replace(/[\\/]+$/,"");
+      if(rootNorm && destNorm!==rootNorm && !destNorm.startsWith(rootNorm+"\\") && !destNorm.startsWith(rootNorm+"/")){
+        if(!confirm("That looks like it's outside your current universe ("+HOME+"). The server will reject this if so — try anyway?")) return;
+      }
+      const doCopy=confirm("OK = Copy, Cancel = Move");
+      fsOp(doCopy?"copy":"move",{path:d.path,dest}).then(res=>{
+        if(res.ok){ showToast((doCopy?"Copied":"Moved")+" "+d.name); hideInspect(); travel(currentPath); }
+        else showToast(res.msg||"Operation failed",true);
+      });
+    };
+    if(delBtn) delBtn.onclick=()=>{
+      if(!confirm("Send "+d.name+" to the graveyard? You can recover it from the .bang_graveyard folder.")) return;
+      fsOp("delete",{path:d.path}).then(res=>{
+        if(res.ok){ showToast("Sent "+d.name+" to the graveyard"); hideInspect(); travel(currentPath); }
+        else showToast(res.msg||"Graveyard move failed",true);
+      });
+    };
+  }
+
+  function fsOp(op,params){
+    const qs=new URLSearchParams(Object.assign({op},params));
+    return fetch("/api/fsop?"+qs.toString()).then(r=>r.json()).catch(e=>({ok:false,msg:String(e)}));
+  }
+
+  // visual-only toast (flashing border instead of sound — accessibility requirement)
+  let toastTimer=null;
+  function showToast(msg,isErr){
+    const t=document.getElementById("toast");
+    t.textContent=msg; t.className=isErr?"err flash":"flash";
+    t.style.display="block";
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(()=>{ t.style.display="none"; },2600);
+  }
+
+  function openFile(d){ fetch("/api/open?path="+encodeURIComponent(d.path)).then(r=>r.json()).then(res=>{
+    showToast(res.ok?("Opened "+d.name):(res.msg||"Open failed"), !res.ok);
+  }).catch(()=>showToast("Open failed",true)); }
+
+  // click disambiguation: single = inspect, double = enter/open
+  let clickTimer=null, lastTapNode=null;
+  function onTap(sx,sy){
+    const n=pickNode(sx,sy);
+    if(n==="CORE"){ if(clickTimer){ clearTimeout(clickTimer); clickTimer=null; } lastTapNode=null; hideInspect(); goUpOneLevel(); return; }
+    if(clickTimer){ clearTimeout(clickTimer); clickTimer=null;
+      if(n && n===lastTapNode){ hideInspect(); enterOrOpen(n); return; } }
+    lastTapNode=n;
+    clickTimer=setTimeout(()=>{ clickTimer=null; if(n) inspect(n); else hideInspect(); }, 250);
+  }
+
+  // =========================================================================
+  // Create flow — stage a new planet (file) or galaxy (folder), preview it
+  // live (rotating, using the real evolution/glyph system) before committing
+  // a real file/folder to disk via the backend.
+  // =========================================================================
+  const createPanel=document.getElementById("create-panel");
+  const cvCanvas=document.getElementById("create-viewport");
+  const cvRenderer=new THREE.WebGLRenderer({canvas:cvCanvas,antialias:true,alpha:true});
+  cvRenderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  const cvScene=new THREE.Scene();
+  const cvCamera=new THREE.PerspectiveCamera(40,1,0.1,100);
+  cvCamera.position.set(0,0,7);
+  cvScene.add(new THREE.AmbientLight(0x99aacc,0.7));
+  const cvKey=new THREE.PointLight(0xffffff,1.6,0); cvKey.position.set(4,5,6); cvScene.add(cvKey);
+  let cvObj=null, cvSpin=0;
+  let createType="file"; // "file" | "folder"
+
+  function cvSizeToCanvas(){
+    const w=cvCanvas.clientWidth||280, h=cvCanvas.clientHeight||170;
+    cvRenderer.setSize(w,h,false); cvCamera.aspect=w/h; cvCamera.updateProjectionMatrix();
+  }
+  function cvClear(){ if(cvObj){ cvScene.remove(cvObj); cvObj.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); cvObj=null; } }
+
+  // simulated size slider: 0..100 maps log-scale across the same evolutionary range as real files
+  function sliderToBytes(v){
+    const f=v/100;
+    const l=EVO_MIN_LOG + f*(EVO_MAX_LOG-EVO_MIN_LOG);
+    return Math.round(Math.pow(10,l));
+  }
+  function refreshCreatePreview(){
+    cvClear();
+    const nameEl=document.getElementById("cname");
+    const sizeEl=document.getElementById("csize");
+    const name=(nameEl.value||(createType==="file"?"untitled.txt":"untitled"));
+    const bytes=sliderToBytes(+sizeEl.value);
+    document.getElementById("csize-val").textContent=fmtSize(bytes);
+    if(createType==="file"){
+      const color=previewGuessColor(name);
+      const category=previewGuessCategory(name);
+      const step=getEvolutionStep(bytes);
+      // a file being staged doesn't exist yet, so it's always brand-new and
+      // untouched — bare/active — regardless of the simulated-size slider,
+      // since size (evolution tier) and age/use are independent axes now.
+      const tex = window.BangPlanetTextures.getPlanetTexture(category, 0, 0);
+      const mat=new THREE.MeshStandardMaterial({map:tex, color:0xffffff, emissive:color,
+        emissiveIntensity:(0.16 - evoBucket(step)*0.015)*(CFG.bodyEmissive/0.5||0.13),
+        roughness:1-CFG.bodyGloss, metalness:0.15, flatShading:false});
+      cvObj=new THREE.Mesh(getGeometryForStep(step), mat); cvObj.scale.setScalar(2.0);
+      addSizeFeatures(cvObj, step, 2.0, color, Math.floor(hash01(name)*1e9));
+    } else {
+      const fakeData={ name, type:"planet", weight:bytes, specks:[], tint:null };
+      cvObj=buildGalaxyPoints(fakeData, 1.6, 0x8fd0ff);
+    }
+    cvScene.add(cvObj);
+  }
+  function cvRenderFrame(){
+    cvSpin+=0.012;
+    if(cvObj){ cvObj.rotation.y=cvSpin; cvObj.rotation.x=Math.sin(cvSpin*0.4)*0.15; }
+    cvSizeToCanvas();
+    cvRenderer.render(cvScene,cvCamera);
+    requestAnimationFrame(cvRenderFrame);
+  }
+  cvRenderFrame();
+
+  document.getElementById("ctype-file").onclick=e=>{ createType="file"; e.target.classList.add("active");
+    document.getElementById("ctype-folder").classList.remove("active");
+    document.getElementById("csize-label").textContent="Simulated size (preview only)";
+    refreshCreatePreview(); };
+  document.getElementById("ctype-folder").onclick=e=>{ createType="folder"; e.target.classList.add("active");
+    document.getElementById("ctype-file").classList.remove("active");
+    document.getElementById("csize-label").textContent="Simulated contents weight (preview only)";
+    refreshCreatePreview(); };
+  document.getElementById("cname").addEventListener("input",refreshCreatePreview);
+  document.getElementById("csize").addEventListener("input",refreshCreatePreview);
+
+  document.getElementById("btn-new").onclick=()=>{
+    hideInspect();
+    document.getElementById("cname").value="";
+    document.getElementById("csize").value=20;
+    document.getElementById("create-err").style.display="none";
+    document.getElementById("create-loc").textContent="in "+currentPath;
+    createPanel.classList.add("show");
+    refreshCreatePreview();
+  };
+  document.getElementById("create-close").onclick=()=>{ createPanel.classList.remove("show"); cvClear(); };
+
+  document.getElementById("btn-create-confirm").onclick=()=>{
+    const errEl=document.getElementById("create-err");
+    const name=(document.getElementById("cname").value||"").trim();
+    if(!name){ errEl.textContent="Name required."; errEl.style.display="block"; return; }
+    if(/[\/\\\0]/.test(name)){ errEl.textContent="Name can't contain / \\ or null characters."; errEl.style.display="block"; return; }
+    errEl.style.display="none";
+    fsOp("create",{path:currentPath, name, kind:createType}).then(res=>{
+      if(res.ok){ showToast((createType==="file"?"Planet":"Galaxy")+" "+name+" created"); createPanel.classList.remove("show"); cvClear(); travel(currentPath); }
+      else { errEl.textContent=res.msg||"Create failed."; errEl.style.display="block"; }
+    });
+  };
+
+  // ---- controls ----
+  document.getElementById("btn-up").onclick=goUpOneLevel;
+  document.getElementById("btn-recenter").onclick=()=>{ target.set(0,0,0);dist=620;yaw=0;pitch=0.36;applyCamera(); };
+  document.getElementById("btn-void").onclick=e=>{ showVoid=!showVoid; e.target.textContent="Void: "+(showVoid?"On":"Off"); e.target.classList.toggle("active",showVoid); travel(currentPath); };
+  document.getElementById("speed").oninput=e=>{ CFG.speed=(+e.target.value)/100; const t=document.getElementById("t_speed"); if(t) t.value=CFG.speed; };
+  window.addEventListener("resize",()=>{ camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight); });
+
+  // ---- live tuning dashboard ----
+  function applyLive(){
+    for(const n of nodes){
+      if(n.data.type==="planet"){
+        n.obj.traverse(o=>{
+          if(o.isPoints && o.userData.isDust){ o.material.opacity=CFG.galaxyGlow*0.7; o.material.size=Math.max(5,(o.userData.baseRadius||n.radius)*CFG.galaxyPoint*6); }
+          if(o.isPoints && o.userData.isComposition){ o.material.size=Math.max(9,(o.userData.baseRadius||n.radius)*CFG.galaxyPoint*13); o.material.opacity=Math.min(1,CFG.galaxyGlow*5+0.55); }
+          if(o.isPoints && o.userData.isCompositionRing){ o.material.size=Math.max(16,(o.userData.baseRadius||n.radius)*CFG.galaxyPoint*22); o.material.opacity=CFG.galaxyHaloOp*0.8; }
+          if(o.userData && o.userData.isHalo){ const r=o.userData.baseRadius||n.radius; o.scale.set(r*CFG.galaxyHalo,r*CFG.galaxyHalo,1); o.material.opacity=CFG.galaxyHaloOp; }
+        });
+      } else {
+        if(n.obj.userData.bodyMat){ const m=n.obj.userData.bodyMat; const st=n.obj.userData.evoStep||0; const glow=n.obj.userData.glow??1;
+          m.roughness=1-CFG.bodyGloss; m.emissiveIntensity=(0.16-evoBucket(st)*0.015)*(CFG.bodyEmissive/0.5)*glow; }
+        n.obj.scale.setScalar((n.obj.userData.baseRadius||n.radius)*CFG.bodyScale);
+        n.obj.traverse(o=>{ if(o.userData && o.userData.isRim) o.material.opacity=CFG.bodyRim*(n.obj.userData.glow??1); });
+      }
+    }
+    orbitGroup.children.forEach(o=>{ o.material.opacity=CFG.orbitOp; });
+    for(const n of nodes){ if(n.trail) n.trail.material.opacity=CFG.trailOp; }
+    starMats.forEach(m=>{ m.opacity=CFG.stars; });
+  }
+
+  const sliderMap={ t_galaxyGlow:"galaxyGlow", t_galaxyHalo:"galaxyHalo", t_galaxyPoint:"galaxyPoint", t_galaxyHaloOp:"galaxyHaloOp",
+    t_bodyGloss:"bodyGloss", t_bodyRim:"bodyRim", t_bodyEmissive:"bodyEmissive", t_bodyScale:"bodyScale",
+    t_fog:"fog", t_stars:"stars", t_core:"core", t_speed:"speed", t_orbitOp:"orbitOp", t_trailOp:"trailOp", t_trailLen:"trailLen" };
+  Object.keys(sliderMap).forEach(id=>{ const el=document.getElementById(id); if(!el) return;
+    el.value=CFG[sliderMap[id]];
+    el.addEventListener("input",()=>{ CFG[sliderMap[id]]=+el.value; applyLive(); }); });
+
+  document.getElementById("btn-tune").onclick=()=>{ document.getElementById("panel").classList.toggle("show"); };
+  document.getElementById("btn-save-render").onclick=()=>{
+    saveStyleSection("rendering", CFG).then(res=>{
+      if(res.ok) showSettingsStatus("Rendering saved — applies on next scan");
+      else showSettingsStatus(res.msg||"Save failed", true);
+    });
+  };
+  document.getElementById("btn-reset-render").onclick=()=>{
+    fetch("/api/style/reset",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({section:"rendering"})})
+      .then(r=>r.json()).then(res=>{
+        if(res.ok){ fetchStyle().then(st=>{ Object.assign(CFG,st.rendering);
+          Object.keys(sliderMap).forEach(id=>{ const el=document.getElementById(id); if(el) el.value=CFG[sliderMap[id]]; });
+          const sp=document.getElementById("speed"); if(sp) sp.value=CFG.speed*100; applyLive();
+          showSettingsStatus("Rendering reset to defaults"); });
+        } else showSettingsStatus(res.msg||"Reset failed", true);
+      });
+  };
+  document.getElementById("btn-change-origin").onclick=async()=>{
+    if(!confirm("Choose a new origin folder? Your current universe's graveyard (.bang_graveyard) stays right where it is — only your new origin gets a fresh one if you ever send something to it.")) return;
+    showSettingsStatus("Opening folder picker…");
+    const res=await pickAndSetRoot();
+    if(res.cancelled){ showSettingsStatus(""); return; }
+    if(!res.ok){ showSettingsStatus(res.msg||"Could not change origin", true); return; }
+    HOME=res.root; currentPath=res.root;
+    hideInspect();
+    document.getElementById("create-panel").classList.remove("show");
+    await travel(HOME);
+    showSettingsStatus("Origin changed — welcome to your new universe");
+  };
+
+  // ---- render loop + fps guard ----
+  let frames=0,lastFps=performance.now(),fpsVal=30; const fpsEl=document.getElementById("fps");
+  let time=0, orbitClock=0;
+  const _v=new THREE.Vector3();
+  function animate(){
+    time+=1;
+    const now0=performance.now();
+    const frozen = now0 < freezeUntil;
+    if(!frozen) orbitClock += CFG.speed;
+
+    const s=1+Math.sin(time*0.04)*0.06; coreGroup.scale.setScalar(s*CFG.core);
+    for(let i=0;i<coronaShells.length;i++){ coronaShells[i].rotation.y+=0.0006*(i+1); coronaShells[i].rotation.x+=0.0004*(i+1); }
+
+    // core label: always at world origin, same projection/fade math as the
+    // per-node labels below, just outside that loop since the core isn't a
+    // node in `nodes`.
+    _v.set(0,0,0).project(camera);
+    if(_v.z>1 || _v.x<-1.1||_v.x>1.1||_v.y<-1.1||_v.y>1.1){ coreLab.style.display="none"; }
+    else {
+      const sx=(_v.x*0.5+0.5)*window.innerWidth, sy=(-_v.y*0.5+0.5)*window.innerHeight;
+      const camDist=camera.position.distanceTo(coreGroup.position);
+      const op=Math.max(0, Math.min(0.92, 1.3 - camDist/1400));
+      if(op<0.06){ coreLab.style.display="none"; }
+      else { coreLab.style.display="block"; coreLab.style.left=sx+"px"; coreLab.style.top=(sy-40)+"px"; coreLab.style.opacity=op; }
+    }
+
+    const fogT=Math.max(0,Math.min(1,(dist-200)/3000));
+    scene.fog.density = (0.00018 + fogT*0.00045) * CFG.fog;
+
+    for(const n of nodes){
+      const p=orbitPosClock(n); n.obj.position.copy(p);
+      if(n.data.type==="planet"){ n.obj.rotation.y+=0.002; }
+      if(n.obj.userData.moons){ for(const moon of n.obj.userData.moons){ const md=moon.userData.moon; md.a+=md.spd*(frozen?0:1);
+        moon.position.set(Math.cos(md.a)*md.d, md.t*md.d*0.5, Math.sin(md.a)*md.d); } }
+      if(!frozen) updateTrail(n,p);
+      if(n.lab){
+        _v.copy(p).project(camera);
+        if(_v.z>1 || _v.x<-1.1||_v.x>1.1||_v.y<-1.1||_v.y>1.1){ n.lab.style.display="none"; }
+        else {
+          const sx=(_v.x*0.5+0.5)*window.innerWidth, sy=(-_v.y*0.5+0.5)*window.innerHeight;
+          const camDist=camera.position.distanceTo(p);
+          const op=Math.max(0, Math.min(0.92, 1.3 - camDist/1400));
+          if(op<0.06){ n.lab.style.display="none"; }
+          else { n.lab.style.display="block"; n.lab.style.left=sx+"px"; n.lab.style.top=(sy - n.radius - 8)+"px"; n.lab.style.opacity=op; }
+        }
+      }
+    }
+
+    renderer.render(scene,camera);
+    frames++; const now=performance.now();
+    if(now-lastFps>=1000){ fpsVal=frames; fpsEl.textContent=frames+" fps · "+nodes.length+" nodes"; frames=0; lastFps=now; }
+    requestAnimationFrame(animate);
+  }
+  function orbitPosClock(n){
+    const ang=n.phase+orbitClock*n.spd;
+    let x=Math.cos(ang)*n.a, z=Math.sin(ang)*n.b, y=0;
+    const y1=y*Math.cos(n.incl)-z*Math.sin(n.incl);
+    const z1=y*Math.sin(n.incl)+z*Math.cos(n.incl);
+    const x2=x*Math.cos(n.node)+z1*Math.sin(n.node);
+    const z2=-x*Math.sin(n.node)+z1*Math.cos(n.node);
+    return new THREE.Vector3(x2,y1,z2);
+  }
+
+  // ---- boot sequence: resolve HOME from the backend before doing anything
+  // path-dependent. No machine-specific folder is ever assumed. ----
+  const onboardEl=document.getElementById("onboard");
+  const onboardErr=document.getElementById("onboard-err");
+
+  async function waitForPywebviewApi(timeoutMs){
+    // pywebview injects window.pywebview.api asynchronously after the page
+    // loads; poll briefly rather than assuming it's already there.
+    const start=performance.now();
+    while(performance.now()-start<timeoutMs){
+      if(window.pywebview && window.pywebview.api && window.pywebview.api.pick_folder) return true;
+      await new Promise(r=>setTimeout(r,50));
+    }
+    return false;
+  }
+
+  // Shared by first-run onboarding AND the "Change Origin Folder…" settings
+  // action — opens the native picker, calls /api/setroot, and returns
+  // {ok, root, msg, cancelled}. Doesn't touch any UI itself so both call
+  // sites can show errors/feedback in whatever surface makes sense for them.
+  async function pickAndSetRoot(){
+    const ready=await waitForPywebviewApi(1500);
+    if(!ready) return {ok:false, cancelled:false, msg:"Folder picker isn't available — is this running inside the Bang app window?"};
+    let chosen=null;
+    try{ chosen=await window.pywebview.api.pick_folder(); }
+    catch(e){ return {ok:false, cancelled:false, msg:"Folder picker failed: "+e}; }
+    if(!chosen) return {ok:false, cancelled:true, msg:null};
+    try{
+      const res=await fetch("/api/setroot?path="+encodeURIComponent(chosen));
+      const data=await res.json();
+      if(!data.ok) return {ok:false, cancelled:false, msg:data.msg||"Could not set that folder."};
+      return {ok:true, cancelled:false, root:data.root||chosen};
+    }catch(e){ return {ok:false, cancelled:false, msg:"Could not reach the Bang server."}; }
+  }
+
+  async function runOnboarding(){
+    onboardEl.classList.add("show");
+    return new Promise(resolve=>{
+      document.getElementById("onboard-pick").onclick=async()=>{
+        onboardErr.textContent="";
+        const res=await pickAndSetRoot();
+        if(res.cancelled) return; // leave the picker up
+        if(!res.ok){ onboardErr.textContent=res.msg; return; }
+        onboardEl.classList.remove("show");
+        resolve(res.root);
+      };
+    });
+  }
+
+  // =========================================================================
+  // Settings panel — unified Rendering / Colors / Age Patterns / Glow menu.
+  // Backed entirely by style.json on the server; this panel never holds its
+  // own "defaults" in JS — CFG and every color/pattern/glow value here are
+  // just a live mirror of whatever the backend currently has on disk.
+  // =========================================================================
+  async function fetchStyle(){
+    try{
+      const res=await fetch("/api/style");
+      STYLE=await res.json();
+      if(STYLE.rendering) Object.assign(CFG, STYLE.rendering);
+      return STYLE;
+    }catch(e){ STYLE=STYLE||{category_colors:{},age_stages:[],lastused_glow:{}}; return STYLE; }
+  }
+  function saveStyleSection(section, data){
+    return fetch("/api/style/update",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({section,data})}).then(r=>r.json());
+  }
+  let settingsStatusTimer=null;
+  function showSettingsStatus(msg, isErr){
+    const el=document.getElementById("settings-status");
+    if(!el) return;
+    el.textContent=msg; el.style.color=isErr?"#ff8a8a":"var(--hud-dim)";
+    clearTimeout(settingsStatusTimer);
+    settingsStatusTimer=setTimeout(()=>{ el.textContent=""; },2400);
+  }
+
+  // ---- shared live-preview mini-scene (same isolated-scene pattern as the
+  // Command panel and Create panel previews) — shows a sample planet that
+  // reacts live to whichever settings tab is currently open. ----
+  const stCanvas=document.getElementById("settings-viewport");
+  const stRenderer=new THREE.WebGLRenderer({canvas:stCanvas,antialias:true,alpha:true});
+  stRenderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  const stScene=new THREE.Scene();
+  const stCamera=new THREE.PerspectiveCamera(40,1,0.1,100);
+  stCamera.position.set(0,0,7);
+  stScene.add(new THREE.AmbientLight(0x99aacc,0.7));
+  const stKey=new THREE.PointLight(0xffffff,1.6,0); stKey.position.set(4,5,6); stScene.add(stKey);
+  let stObj=null, stSpin=0;
+  let stPreviewKind="document", stPreviewAgeStage="bare", stPreviewUseStage="active", stPreviewGlow=1.0;
+  function stSizeToCanvas(){
+    const w=stCanvas.clientWidth||260, h=stCanvas.clientHeight||120;
+    stRenderer.setSize(w,h,false); stCamera.aspect=w/h; stCamera.updateProjectionMatrix();
+  }
+  function stClear(){ if(stObj){ stScene.remove(stObj); stObj.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); stObj=null; } }
+  function refreshSettingsPreview(){
+    stClear();
+    const colors=(STYLE&&STYLE.category_colors)||{};
+    const colStr=colors[stPreviewKind]||"rgb(205,214,224)";
+    const m=colStr.match(/(\d+),(\d+),(\d+)/);
+    const color=m?((+m[1])<<16)|((+m[2])<<8)|(+m[3]):0xcdd6e0;
+    const step=28; // mid-tier size for preview purposes — settings previews a representative body, not a specific real file
+    const ageIdx = window.BangPlanetTextures.STAGE_NAMES.age.indexOf(stPreviewAgeStage);
+    const useIdx = window.BangPlanetTextures.STAGE_NAMES.use.indexOf(stPreviewUseStage);
+    const tex = window.BangPlanetTextures.getPlanetTexture(stPreviewKind, ageIdx<0?0:ageIdx, useIdx<0?0:useIdx);
+    const mat=new THREE.MeshStandardMaterial({map:tex, color:0xffffff, emissive:color,
+      emissiveIntensity:(0.16-evoBucket(step)*0.015)*(CFG.bodyEmissive/0.5||0.13)*stPreviewGlow,
+      roughness:1-CFG.bodyGloss, metalness:0.15, flatShading:false});
+    stObj=new THREE.Mesh(getGeometryForStep(step), mat); stObj.scale.setScalar(2.0);
+    addSizeFeatures(stObj, step, 2.0, color, 12345);
+    stScene.add(stObj);
+  }
+  function stRenderFrame(){
+    stSpin+=0.012;
+    if(stObj){ stObj.rotation.y=stSpin; stObj.rotation.x=Math.sin(stSpin*0.4)*0.15; }
+    stSizeToCanvas();
+    stRenderer.render(stScene,stCamera);
+    requestAnimationFrame(stRenderFrame);
+  }
+  stRenderFrame();
+
+  // ---- tabs ----
+  function switchSettingsTab(tab){
+    document.querySelectorAll(".stab").forEach(b=>b.classList.toggle("active", b.dataset.tab===tab));
+    document.querySelectorAll(".stab-pane").forEach(p=>p.classList.remove("active"));
+    const pane=document.getElementById("pane-"+tab); if(pane) pane.classList.add("active");
+    if(tab==="colors"){ stPreviewAgeStage="bare"; stPreviewUseStage="active"; }
+    refreshSettingsPreview();
+  }
+  document.querySelectorAll(".stab").forEach(b=>{ b.addEventListener("click",()=>switchSettingsTab(b.dataset.tab)); });
+
+  // ---- Colors tab: one color picker per category ----
+  function buildColorRows(){
+    const wrap=document.getElementById("color-rows"); if(!wrap) return;
+    wrap.innerHTML="";
+    const colors=(STYLE&&STYLE.category_colors)||{};
+    Object.keys(colors).forEach(cat=>{
+      const m=colors[cat].match(/(\d+),(\d+),(\d+)/);
+      const hex= m ? "#"+[1,2,3].map(i=>(+m[i]).toString(16).padStart(2,"0")).join("") : "#cdd6e0";
+      const row=document.createElement("div"); row.className="color-row";
+      row.innerHTML='<label>'+escapeHtml(cat)+'</label><input type="color" value="'+hex+'" data-cat="'+escapeHtml(cat)+'">';
+      const input=row.querySelector("input");
+      input.addEventListener("input",()=>{
+        const r=parseInt(input.value.slice(1,3),16), g=parseInt(input.value.slice(3,5),16), b=parseInt(input.value.slice(5,7),16);
+        STYLE.category_colors[cat]="rgb("+r+","+g+","+b+")";
+        stPreviewKind=cat; refreshSettingsPreview();
+      });
+      input.addEventListener("focus",()=>{ stPreviewKind=cat; refreshSettingsPreview(); });
+      wrap.appendChild(row);
+    });
+  }
+  document.getElementById("btn-save-colors").onclick=()=>{
+    saveStyleSection("category_colors", STYLE.category_colors).then(res=>{
+      if(res.ok) showSettingsStatus("Colors saved — applies on next scan");
+      else showSettingsStatus(res.msg||"Save failed", true);
+    });
+  };
+  document.getElementById("btn-reset-colors").onclick=()=>{
+    fetch("/api/style/reset",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({section:"category_colors"})})
+      .then(r=>r.json()).then(res=>{
+        if(res.ok){ fetchStyle().then(()=>{ buildColorRows(); refreshSettingsPreview(); showSettingsStatus("Colors reset to defaults"); }); }
+        else showSettingsStatus(res.msg||"Reset failed", true);
+      });
+  };
+
+  // ---- Age Stages tab: assign any of the 4 structure stages to any threshold bucket ----
+  const AGE_PATTERN_CHOICES=["bare","outpost","settlement","metropolis"];
+  function buildAgeRows(){
+    const wrap=document.getElementById("age-rows"); if(!wrap) return;
+    wrap.innerHTML="";
+    const stages=(STYLE&&STYLE.age_stages)||[];
+    stages.forEach((stage,i)=>{
+      const row=document.createElement("div"); row.className="age-row";
+      const daysLabel = stage.max_days==null ? "beyond" : ("≤ "+stage.max_days+"d");
+      const opts=AGE_PATTERN_CHOICES.map(p=>'<option value="'+p+'"'+(p===stage.pattern?" selected":"")+'>'+p+'</option>').join("");
+      row.innerHTML='<label>'+escapeHtml(stage.name)+'</label><select>'+opts+'</select><span class="age-days">'+daysLabel+'</span>';
+      const select=row.querySelector("select");
+      select.addEventListener("change",()=>{
+        stages[i].pattern=select.value;
+        stPreviewAgeStage=select.value; refreshSettingsPreview();
+      });
+      select.addEventListener("focus",()=>{ stPreviewAgeStage=stage.pattern; refreshSettingsPreview(); });
+      wrap.appendChild(row);
+    });
+  }
+  document.getElementById("btn-save-age").onclick=()=>{
+    saveStyleSection("age_stages", STYLE.age_stages).then(res=>{
+      if(res.ok) showSettingsStatus("Age stages saved — applies on next scan");
+      else showSettingsStatus(res.msg||"Save failed", true);
+    });
+  };
+  document.getElementById("btn-reset-age").onclick=()=>{
+    fetch("/api/style/reset",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({section:"age_stages"})})
+      .then(r=>r.json()).then(res=>{
+        if(res.ok){ fetchStyle().then(()=>{ buildAgeRows(); refreshSettingsPreview(); showSettingsStatus("Age stages reset to defaults"); }); }
+        else showSettingsStatus(res.msg||"Reset failed", true);
+      });
+  };
+
+  // ---- Use Stages tab: same pattern as Age Stages, for the decay overlay ----
+  const USE_PATTERN_CHOICES=["active","quiet","neglected","derelict"];
+  function buildUseRows(){
+    const wrap=document.getElementById("use-rows"); if(!wrap) return;
+    wrap.innerHTML="";
+    const stages=(STYLE&&STYLE.use_stages)||[];
+    stages.forEach((stage,i)=>{
+      const row=document.createElement("div"); row.className="age-row";
+      const daysLabel = stage.max_days==null ? "beyond" : ("≤ "+stage.max_days+"d");
+      const opts=USE_PATTERN_CHOICES.map(p=>'<option value="'+p+'"'+(p===stage.pattern?" selected":"")+'>'+p+'</option>').join("");
+      row.innerHTML='<label>'+escapeHtml(stage.name)+'</label><select>'+opts+'</select><span class="age-days">'+daysLabel+'</span>';
+      const select=row.querySelector("select");
+      select.addEventListener("change",()=>{
+        stages[i].pattern=select.value;
+        stPreviewUseStage=select.value; refreshSettingsPreview();
+      });
+      select.addEventListener("focus",()=>{ stPreviewUseStage=stage.pattern; refreshSettingsPreview(); });
+      wrap.appendChild(row);
+    });
+  }
+  document.getElementById("btn-save-use").onclick=()=>{
+    saveStyleSection("use_stages", STYLE.use_stages).then(res=>{
+      if(res.ok) showSettingsStatus("Use stages saved — applies on next scan");
+      else showSettingsStatus(res.msg||"Save failed", true);
+    });
+  };
+  document.getElementById("btn-reset-use").onclick=()=>{
+    fetch("/api/style/reset",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({section:"use_stages"})})
+      .then(r=>r.json()).then(res=>{
+        if(res.ok){ fetchStyle().then(()=>{ buildUseRows(); refreshSettingsPreview(); showSettingsStatus("Use stages reset to defaults"); }); }
+        else showSettingsStatus(res.msg||"Reset failed", true);
+      });
+  };
+
+  // ---- Glow tab: three numeric controls for the last-used brightness curve ----
+  function buildGlowControls(){
+    const g=(STYLE&&STYLE.lastused_glow)||{};
+    const maxEl=document.getElementById("g_maxglow"), minEl=document.getElementById("g_minglow"), winEl=document.getElementById("g_window");
+    if(maxEl) maxEl.value = g.max_glow ?? 1.0;
+    if(minEl) minEl.value = g.min_glow ?? 0.15;
+    if(winEl) winEl.value = g.window_days ?? 60;
+    [maxEl,minEl,winEl].forEach(el=>{ if(!el) return; el.addEventListener("input",()=>{
+      stPreviewGlow = +maxEl.value; refreshSettingsPreview();
+    }); });
+  }
+  document.getElementById("btn-save-glow").onclick=()=>{
+    const data={ max_glow:+document.getElementById("g_maxglow").value,
+      min_glow:+document.getElementById("g_minglow").value,
+      window_days:+document.getElementById("g_window").value };
+    STYLE.lastused_glow=data;
+    saveStyleSection("lastused_glow", data).then(res=>{
+      if(res.ok) showSettingsStatus("Glow settings saved — applies on next scan");
+      else showSettingsStatus(res.msg||"Save failed", true);
+    });
+  };
+  document.getElementById("btn-reset-glow").onclick=()=>{
+    fetch("/api/style/reset",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({section:"lastused_glow"})})
+      .then(r=>r.json()).then(res=>{
+        if(res.ok){ fetchStyle().then(()=>{ buildGlowControls(); showSettingsStatus("Glow reset to defaults"); }); }
+        else showSettingsStatus(res.msg||"Reset failed", true);
+      });
+  };
+
+  function initSettingsPanel(){
+    buildColorRows();
+    buildAgeRows();
+    buildUseRows();
+    buildGlowControls();
+    refreshSettingsPreview();
+  }
+
+  async function boot(){
+    let root=null;
+    try{
+      const res=await fetch("/api/home");
+      const data=await res.json();
+      root=data.root||null;
+    }catch(e){ /* server not reachable yet — onboarding will retry via setroot's own fetch */ }
+
+    if(!root){ root=await runOnboarding(); }
+
+    HOME=root; currentPath=root;
+    await fetchStyle(); // loads STYLE and applies STYLE.rendering into CFG before first render
+    initSettingsPanel();
+    await travel(HOME);
+    animate();
+  }
+  boot();
+})();
+</script>
+</body>
+</html>
