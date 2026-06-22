@@ -14,24 +14,6 @@ Edge WebView2 runtime, which is already installed on virtually all current
 Windows machines; if it's somehow missing, Windows will prompt to install it
 automatically the first time Bang opens.
 
-## Building Bang.exe yourself
-
-If you don't already have a `Bang.exe`, building one requires Python once,
-just for the build step itself — the result doesn't need Python to run.
-
-1. Install Python 3.9+ from python.org (check "Add Python to PATH" during
-   setup)
-2. Double-click `build.bat` in this folder
-3. Wait for it to finish — it installs its own build dependencies, then
-   produces `dist\Bang.exe`
-
-That `.exe` is now standalone: copy it anywhere, hand it to someone else,
-it doesn't need Python installed on the machine that runs it.
-
-If `Bang.exe` ever opens and then immediately closes with no visible error,
-run `build_debug.bat` instead to get a version that shows error output in a
-console window, to see what actually happened.
-
 ## Running from source instead (no .exe)
 
 If you'd rather just run the Python directly without building an .exe:
